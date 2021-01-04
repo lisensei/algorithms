@@ -36,7 +36,7 @@ class Network(nn.Module):
 
 
 net=Network(784,10)
-lr=0.003
+lr=0.001
 loss=nn.CrossEntropyLoss()
 optimizer=torch.optim.Adam(net.parameters(),lr=lr)
 

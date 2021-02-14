@@ -144,7 +144,7 @@ class CNN(nn.Module):
         out=self.cnn3(z1+x);
         out=self.r3(out)
         out=self.cnn4(out+z1);
-        z2=self.r4(out)
+        out=self.r4(out)
         out=out.reshape(batchSize,28*28*4)
         out=self.fc(out)
         return out

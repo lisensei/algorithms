@@ -24,11 +24,11 @@ node* ast;
 %type <ast>   STMTS STMT  AEXP TERM  
 %start LAN
 %%
-LAN:STMTS END{preorder($1);}
+LAN:STMTS END{printf("Compiling\n");prog($1);}
 ;
 
-STMTS: STMT {$$=createNode(STMTS,$1,NULL,NULL);}
-|STMTS STMT {$$=createNode(STMTS,$1,$2,NULL);}
+STMTS: 
+|STMT STMTS {$$=createNode(STMTS,$1,$2,NULL);}
 
 STMT:AEXP CLN	{$$=createNode(STMT,$1,NULL,NULL);}
 
@@ -38,8 +38,8 @@ AEXP:TERM
 ;
 
 TERM:FACT    
-|TERM MUL FACT 
-|TERM DIV FACT 
+|TERM MUL FACT {$$=createNode(NMUL,$1,$3,NULL);}
+|TERM DIV FACT {$$=createNode(NADD,$1,$3,NULL);}
 ;
 
 FACT:NUM	{$$=createLeaf(NNUM,$1);}

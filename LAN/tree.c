@@ -46,6 +46,8 @@ void preorder(node * root){
 		return;
 	
 	switch(root->nodeType){
+		case STMTS:printf("Statements\n");break;
+		case STMT:printf("Statement\n");break;
 		case NADD: printf("ADD\n");break;
 		case NSUB: printf("SUB\n");break;
 		case NMUL: printf("MUL\n");break;
@@ -76,3 +78,35 @@ void postorder(node *root){
 	printf("%d\n",root->nodeType);
 }
 
+
+double eval(node*root){
+	double v=0;
+		switch(root->nodeType){
+		case LEAF: v=root->value;break;
+		case NADD: printf("ADD\n");v=eval(root->left)+eval(root->mid);break;
+		case NSUB: printf("SUB\n");v=eval(root->left)-eval(root->mid);break;
+		case NMUL: printf("MUL\n");v=eval(root->left)*eval(root->mid);break;
+		case NDIV: printf("DIV\n");v=eval(root->left)/eval(root->mid);break;
+		case NWHILE:printf("WHILE\n");break;
+		case STMT:v=eval(root->left);break;
+		default:
+			printf("Invalid node type\n");
+			break;
+	}
+	return v;
+}
+
+void prog(node* root){
+	if(root==NULL){
+		printf("Return run value:%f\n",eval(root) );
+		return;
+	}
+
+	if (root->nodeType!=STMTS){
+		printf("%f\n",eval(root) );
+		return;
+	 }	
+		prog(root->left);
+		prog(root->mid);
+
+}

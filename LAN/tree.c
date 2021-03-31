@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #define NODESIZE sizeof(node)
-enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NWHILE,NBOO,NEQU,AEX,LEAF,STMT,STMTS};
+enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NWHILE,NBOO,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
 
 typedef enum nodeType nodeType;
 struct node
@@ -52,6 +52,15 @@ void preorder(node * root){
 		case NSUB: printf("SUB\n");break;
 		case NMUL: printf("MUL\n");break;
 		case NDIV: printf("DIV\n");break;
+		case NSAND:printf("NSAND\n");break;
+		case NSOR:printf("NSOR\n");break;
+		case NNOT:printf("NNOT\n");break;
+		case NGT:printf("NGT\n");break;
+		case NLT:printf("NLT\n");break;
+		case NGE:printf("NGE\n");break;
+		case NLE:printf("NLE\n");break;
+		case AEXP:printf("AEXP\n");break;
+		case BEXP:printf("BEXP\n");break;
 		case NWHILE:printf("WHILE\n");break;
 		case LEAF:printf("Terminal reached,value:%f\n",root->value);
 	}
@@ -87,10 +96,20 @@ double eval(node*root){
 		case NSUB: printf("SUB\n");v=eval(root->left)-eval(root->mid);break;
 		case NMUL: printf("MUL\n");v=eval(root->left)*eval(root->mid);break;
 		case NDIV: printf("DIV\n");v=eval(root->left)/eval(root->mid);break;
+		case NNOT:printf("NNOT\n");v=!eval(root->left);break;
+		case NSAND:printf("NSAND\n");v=eval(root->left)&&eval(root->mid);break;
+		case NSOR:printf("NSOR\n");v=eval(root->left)||eval(root->mid);break;
+		case NGT:printf("NGT\n");v=eval(root->left)>eval(root->mid);break;
+		case NLT:printf("NLT\n");v=eval(root->left)<eval(root->mid);break;
+		case NGE:printf("NGE\n");v=eval(root->left)>=eval(root->mid);break;
+		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->mid);break;
+		case AEXP:printf("AEXP\n");v=eval(root->left);break;
+		case BEXP:printf("BEXP\n");v=eval(root->left);break;
 		case NWHILE:printf("WHILE\n");break;
 		case STMT:v=eval(root->left);break;
 		default:
-			printf("Invalid node type\n");
+
+			printf("type:%d,Invalid node type\n",root->nodeType);
 			break;
 	}
 	return v;

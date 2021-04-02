@@ -3,37 +3,38 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#include "tree.h"
 #include "tree.c"
 int yylex(void);
 void yyerror(char *);
-node* ast;
 %}
 %union{
 	struct node* ast;
-	int ITG;
+	int INT;
 	double DBL;
-	char  ID[30];
+	char  ID;
 }
 
-%token ADD SUB MUL DIV NL IF THEN  FI CMA CLN MOD POW AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END
-%token LP RP
+%token NL IF THEN  FI CMA CLN MOD POW AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END LP RP
+%left ADD SUB
+%left MUL DIV 
 %token NOT 
-%token <ID> IDF 
-%token <DBL> NUM TRUE FALSE 
-%type <ast>	 FACT   
-%type <ast>   STMTS STMT AEXP TERM BEXP BTERM 
+%token <INT> NUM TRUE FALSE 
+%token <ast> IDF
+%type <ast>   STMTS STMT AEXP  BEXP BTERM 
 %start LAN
 %%
-LAN:STMTS END{printf("Syntax tree:\n");preorder($1);printf("\nEvaluate:");prog($1);}
+LAN:STMTS END{printf("\nEvaluate:");prog($1);}
 ;
 
-STMTS: 
+STMTS: STMT
 |STMT STMTS {$$=createNode(STMTS,$1,$2);}
 |DO BEXP THEN STMTS OD CLN {$$=createNode(NWHILE,$2,$4);}
 
 
 STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
 |BEXP CLN
+|IDF ASN AEXP CLN	{$$=createNode(NASN,$1,$3);}
 ;
 
 
@@ -53,17 +54,16 @@ BTERM:TRUE 				{$$=createLeaf(NBOO,$1);}
 ;
 
 //Arithmetic expression grammar
-AEXP:TERM		
-|AEXP ADD TERM	{$$=createNode(NADD,$1,$3);}
-|AEXP SUB TERM	{$$=createNode(NSUB,$1,$3);}
-;
-TERM:FACT    	
-|TERM MUL FACT {$$=createNode(NMUL,$1,$3);}
-|TERM DIV FACT {$$=createNode(NDIV,$1,$3);}
-;
-FACT:NUM	{$$=createLeaf(NNUM,$1);}
+AEXP:		
+AEXP ADD AEXP	{$$=createNode(NADD,$1,$3);}
+|AEXP SUB AEXP	{$$=createNode(NSUB,$1,$3);}    	
+|AEXP MUL AEXP {$$=createNode(NMUL,$1,$3);}
+|AEXP DIV AEXP {$$=createNode(NDIV,$1,$3);}
+|NUM	{$$=createLeaf(NNUM,$1);}
 |LP AEXP RP	{$$=createNode(AEXP,$2,NULL);}	
+|IDF		
 ;
+	
 
 %%
 void yyerror(char *str){
@@ -77,7 +77,7 @@ int yywrap(){
 int main(){
 
 yyparse();
-
+printf("exited\n");
 }
 
 

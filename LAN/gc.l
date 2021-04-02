@@ -1,14 +1,13 @@
 %{
 #include <stdio.h>
 #include "y.tab.h"
-double getValue(char idf[]);
+#include "tree.h"
 void yyerror(char *);
 %}
 %%
-[1-9][0-9]*				  {int d;sscanf(yytext,"%d",&d);yylval.DBL=(double)d;return NUM;}
-([1-9][0-9]*|0)\.[0-9]+   {sscanf(yytext,"%lf",&yylval.DBL);return NUM;}
-"true"	{yylval.DBL=(double)1.0;return TRUE;}
-"false" {yylval.DBL=(double)0.0;return FALSE;}
+[1-9][0-9]*				  {sscanf(yytext,"%d",&yylval.INT);return NUM;}
+"true"	{yylval.INT=1;return TRUE;}
+"false" {yylval.INT=0;return FALSE;}
 "+"     return ADD;
 "-"     return SUB;
 "*"	    return MUL;
@@ -41,7 +40,7 @@ void yyerror(char *);
 "od"	return OD;
 "END"	return END;
 "print"	return PRINT;
-[a-zA-Z_]+[a-zA-Z_]* {sscanf(yytext,"%s",yylval.ID); return IDF;}
+[a-zA-Z]+ {char c;node* root=createID(NIDF,yytext[0]);yylval.ast=root;return IDF;}
 \n      
 [ \t]+ 
 .

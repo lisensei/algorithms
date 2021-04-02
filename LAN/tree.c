@@ -1,27 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "tree.h"
 #define NODESIZE sizeof(node)
-enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NWHILE,NBOO,ATERM,BTERM,AFACT,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
 
-typedef enum nodeType nodeType;
-struct node
-{
-	int  nodeType;
-	double value;
-	struct node* left;
-	struct node* right;
-};
+int getIndex(char c){
+	if(c>=97){
+		return c-97;
+	}else{
+		return c-65+26;
+	}
 
-struct leaf{
-	int nodeType;
-	double value;
-};
-
-typedef struct node node;
-typedef struct leaf leaf;
-void prog(node*root);
-double eval(node*root);
-
+}
 
 node* createNode(int nt,node* l,node* r){
 	node* temp=malloc(NODESIZE);
@@ -31,7 +20,15 @@ node* createNode(int nt,node* l,node* r){
 	return temp;
 }
 
-node* createLeaf(int nt,double val){
+node* createID(int nt,char c){
+	node* temp=malloc(NODESIZE);
+	temp->name=c;
+	temp->nodeType=nt;
+	temp->left=NULL;
+	temp->right=NULL;
+	return temp;
+}
+node* createLeaf(int nt,int val){
 	node* leaf=malloc(sizeof(node));
 	leaf->nodeType=nt;
 	leaf->left=NULL;
@@ -62,11 +59,11 @@ void preorder(node * root){
 		case AEXP:printf("AEXP\n");break;
 		case BEXP:printf("BEXP\n");break;
 		case NWHILE:printf("WHILE\n");break;
-		case NNUM:printf("Terminal reached,value:%f\n",root->value);break;
-		case NBOO:printf("Bool Terminal Reached,value:%f\n",root->value);break;
-		case ATERM:printf("ATERM\n");break;
+		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
+		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
+		case NIDF:printf("NIDF\n");break;
+		case NASN:printf("NASN\n");break;
 		case BTERM:printf("BTERM\n");break;
-		case AFACT:printf("AFACT\n");break;
 		default:
 			printf("Unkown type\n");
 	}
@@ -91,24 +88,26 @@ void postorder(node *root){
 }
 
 
-double eval(node*root){
-	double v=0;
+int eval(node*root){
+	int v=0;
 		switch(root->nodeType){
 		case NNUM: v=root->value;break;
 		case NBOO: v=root->value;break;
 		case NADD: v=eval(root->left)+eval(root->right);break;
-		case NSUB: printf("OP SUB\n");v=eval(root->left)-eval(root->right);break;
+		case NSUB: v=eval(root->left)-eval(root->right);break;
 		case NMUL: printf("OP MUL\n");v=eval(root->left)*eval(root->right);break;
 		case NDIV: printf("OP DIV\n");v=eval(root->left)/eval(root->right);break;
 		case NNOT:printf("OP NNOT\n");v=!eval(root->left);break;
 		case NSAND:printf("NSAND\n");v=eval(root->left)&&eval(root->right);break;
 		case NSOR:printf("NSOR\n");v=eval(root->left)||eval(root->right);break;
-		case NGT:printf("NGT\n");v=eval(root->left)>eval(root->right);break;
+		case NGT:v=eval(root->left)>eval(root->right);break;
 		case NLT:printf("NLT\n");v=eval(root->left)<eval(root->right);break;
 		case NGE:printf("NGE\n");v=eval(root->left)>=eval(root->right);break;
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
 		case AEXP:v=eval(root->left);break;
-		case BEXP:printf("OP BEXP\n");v=eval(root->left);break;
+		case BEXP:v=eval(root->left);break;
+		case NASN:v=eval(root->right);valueTable[getIndex(root->left->name)]=v;break;
+		case NIDF:v=valueTable[getIndex(root->name)];break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
 	
@@ -126,11 +125,10 @@ void prog(node* root){
 	}
 
 	if (root->nodeType!=STMTS){
-		printf("Output:%f\n",eval(root) );
+		printf("%d:%d\n",root->nodeType,eval(root) );
 		return;
 	 }	
 		prog(root->left);
 		prog(root->right);
 
 }
-

@@ -30,7 +30,7 @@ LAN:STMTS END{printf("=====\n");printStack(symbolTable);printf("=====\n");preord
 STMTS: STMT
 |STMT STMTS {$$=createNode(STMTS,$1,$2);}
 |DO BEXP THEN STMTS OD CLN {$$=createNode(NWHILE,$2,$4);}
-
+|IF BEXP THEN STMTS LB RB BEXP THEN STMTS FI CLN {$$=createIFES(IFES,$2,$4,$7,$9);}
 
 STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
 |BEXP CLN
@@ -42,6 +42,7 @@ STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
 BEXP:BTERM			
 |BEXP SAND BTERM	{$$=createNode(NSAND,$1,$3);}
 |BEXP SOR BTERM		{$$=createNode(NSOR,$1,$3);}
+|AEXP EQU AEXP		{$$=createNode(NEQU,$1,$3);}
 |AEXP GT AEXP		{$$=createNode(NGT,$1,$3);}
 |AEXP LT AEXP	 	{$$=createNode(NLT,$1,$3);}
 |AEXP GE AEXP		{$$=createNode(NGE,$1,$3);}

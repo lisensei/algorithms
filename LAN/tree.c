@@ -5,6 +5,8 @@ node* createNode(int nt,node* l,node* r){
 	temp->nodeType=nt;
 	temp->left=l;
 	temp->right=r;
+	temp->sibOne=NULL;
+	temp->sibTwo=NULL;
 	return temp;
 }
 
@@ -14,6 +16,8 @@ node* createID(int nt,char* c){
 	temp->nodeType=nt;
 	temp->left=NULL;
 	temp->right=NULL;
+	temp->sibOne=NULL;
+	temp->sibTwo=NULL;
 	return temp;
 }
 node* createLeaf(int nt,int val){
@@ -21,10 +25,21 @@ node* createLeaf(int nt,int val){
 	leaf->nodeType=nt;
 	leaf->left=NULL;
 	leaf->right=NULL;
+	leaf->sibOne=NULL;
+	leaf->sibTwo=NULL;
 	leaf->value=val;
 	return  leaf;
 }
 
+node* createIFES(int nt,node* l,node*r,node*s1,node*s2){
+	node* temp=malloc(NODESIZE);
+	temp->nodeType=nt;
+	temp->left=l;
+	temp->right=r;
+	temp->sibOne=s1;
+	temp->sibTwo=s2;
+	return temp;
+}
 
 void preorder(node * root){
 	if(root==NULL)
@@ -40,12 +55,14 @@ void preorder(node * root){
 		case NSAND:printf("NSAND\n");break;
 		case NSOR:printf("NSOR\n");break;
 		case NNOT:printf("NNOT\n");break;
+		case NEQU:printf("NEQU");break;
 		case NGT:printf("NGT\n");break;
 		case NLT:printf("NLT\n");break;
 		case NGE:printf("NGE\n");break;
 		case NLE:printf("NLE\n");break;
 		case AEXP:printf("AEXP\n");break;
 		case BEXP:printf("BEXP\n");break;
+		case IFES:printf("IFES\n");break;
 		case NWHILE:printf("WHILE\n");break;
 		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
 		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
@@ -58,6 +75,8 @@ void preorder(node * root){
 
 	preorder(root->left);
 	preorder(root->right);
+	preorder(root->sibOne);
+	preorder(root->sibTwo);
 }
 void inorder(node *root){
 	if(root==NULL)
@@ -89,6 +108,7 @@ int eval(node*root){
 		case NSAND:printf("NSAND\n");v=eval(root->left)&&eval(root->right);break;
 		case NSOR:printf("NSOR\n");v=eval(root->left)||eval(root->right);break;
 		case NGT:v=eval(root->left)>eval(root->right);break;
+		case NEQU:v=eval(root->left)==eval(root->right);break;
 		case NLT:printf("NLT\n");v=eval(root->left)<eval(root->right);break;
 		case NGE:printf("NGE\n");v=eval(root->left)>=eval(root->right);break;
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
@@ -96,6 +116,7 @@ int eval(node*root){
 		case BEXP:v=eval(root->left);break;
 		case NASN:v=eval(root->right);valueTable[getIndex(symbolTable,root->left->name)]=v;break;
 		case NIDF:v=valueTable[getIndex(symbolTable,root->name)];break;
+		case IFES:if(eval(root->left)){v=eval(root->right);}else{v=eval(root->sibTwo);}break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
 	

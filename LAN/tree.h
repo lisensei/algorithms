@@ -29,7 +29,7 @@ int exist(stack* s,char * c);
 
 
 //Tree:
-enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NASN,NWHILE,NBOO,NIDF,ATERM,BTERM,AFACT,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
+enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NASN,IFES,NWHILE,NBOO,NIDF,ATERM,BTERM,AFACT,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
 
 typedef enum nodeType nodeType;
 struct node
@@ -39,6 +39,8 @@ struct node
 	int value;
 	struct node* left;
 	struct node* right;
+	struct node* sibOne;
+	struct node* sibTwo;
 };
 
 struct leaf{
@@ -54,6 +56,7 @@ int getIndex(stack* s,char* c);
 node* createNode(int nt,node* l,node* r);
 node* createID(int nt,char* c);
 node* createLeaf(int nt,int val);
+node* createIFES(int nt,node* l,node*r,node*s1,node*s2);
 void preorder(node * root);
 void inorder(node * root);
 void postorder(node * root);

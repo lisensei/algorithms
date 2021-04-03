@@ -1,16 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "tree.h"
-#define NODESIZE sizeof(node)
-
-int getIndex(char c){
-	if(c>=97){
-		return c-97;
-	}else{
-		return c-65+26;
-	}
-
-}
 
 node* createNode(int nt,node* l,node* r){
 	node* temp=malloc(NODESIZE);
@@ -20,7 +8,7 @@ node* createNode(int nt,node* l,node* r){
 	return temp;
 }
 
-node* createID(int nt,char c){
+node* createID(int nt,char* c){
 	node* temp=malloc(NODESIZE);
 	temp->name=c;
 	temp->nodeType=nt;
@@ -61,7 +49,7 @@ void preorder(node * root){
 		case NWHILE:printf("WHILE\n");break;
 		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
 		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
-		case NIDF:printf("NIDF\n");break;
+		case NIDF:printf("NIDF:name:%s\n",root->name);break;
 		case NASN:printf("NASN\n");break;
 		case BTERM:printf("BTERM\n");break;
 		default:
@@ -106,8 +94,8 @@ int eval(node*root){
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
 		case AEXP:v=eval(root->left);break;
 		case BEXP:v=eval(root->left);break;
-		case NASN:v=eval(root->right);valueTable[getIndex(root->left->name)]=v;break;
-		case NIDF:v=valueTable[getIndex(root->name)];break;
+		case NASN:v=eval(root->right);valueTable[getIndex(symbolTable,root->left->name)]=v;break;
+		case NIDF:v=valueTable[getIndex(symbolTable,root->name)];break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
 	

@@ -40,7 +40,7 @@ void yyerror(char *);
 "od"	return OD;
 "END"	return END;
 "print"	return PRINT;
-[a-zA-Z]+ {char c;node* root=createID(NIDF,yytext[0]);yylval.ast=root;return IDF;}
+[a-zA-Z_]+[a-zA-Z0-9_]* {push(symbolTable,strdup(yytext));node* root=createID(NIDF,strdup(yytext));yylval.ast=root;return IDF;}
 \n      
 [ \t]+ 
 .

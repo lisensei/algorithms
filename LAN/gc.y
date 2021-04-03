@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "tree.h"
-#include "tree.c"
+
 int yylex(void);
 void yyerror(char *);
 %}
@@ -24,7 +24,7 @@ void yyerror(char *);
 %type <ast>   STMTS STMT AEXP  BEXP BTERM 
 %start LAN
 %%
-LAN:STMTS END{printf("\nEvaluate:");prog($1);}
+LAN:STMTS END{printStack(symbolTable);preorder($1);prog($1);printf("ENDED OK\n");}
 ;
 
 STMTS: STMT
@@ -75,7 +75,7 @@ int yywrap(){
 }
 
 int main(){
-
+symbolTable=init();
 yyparse();
 printf("exited\n");
 }

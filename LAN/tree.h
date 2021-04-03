@@ -2,8 +2,33 @@
 #define _TREE_H
 #include <stdio.h>
 #include <stdlib.h>
-#include "stack.h"
+#include <string.h>
 #define NODESIZE sizeof(node)
+#define SYMSIZE 100
+
+// Stack
+struct stack
+{
+	char* symbol[SYMSIZE]; 
+	int top;
+};
+
+typedef struct stack stack;
+
+stack* init();
+
+void push(stack* s,char* c);
+
+char* pop(stack* s);
+
+int stackSize(stack * s);
+
+void printStack(stack* s);
+int getIndex(stack* s, char* c);
+int exist(stack* s,char * c);
+
+
+//Tree:
 enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NASN,NWHILE,NBOO,NIDF,ATERM,BTERM,AFACT,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
 
 typedef enum nodeType nodeType;

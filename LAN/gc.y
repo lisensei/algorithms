@@ -24,7 +24,7 @@ void yyerror(char *);
 %type <ast>   STMTS STMT AEXP  BEXP BTERM 
 %start LAN
 %%
-LAN:STMTS END{printStack(symbolTable);preorder($1);prog($1);printf("ENDED OK\n");}
+LAN:STMTS END{printf("=====\n");printStack(symbolTable);printf("=====\n");preorder($1);prog($1);}
 ;
 
 STMTS: STMT

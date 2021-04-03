@@ -120,3 +120,53 @@ void prog(node* root){
 		prog(root->right);
 
 }
+
+//stack:
+stack* init() {
+	stack* temp = malloc(sizeof(stack));
+	temp->top = 0;
+	return temp;
+}
+
+void push(stack* s, char* c) {
+	if(exist(s,c))
+		return;
+	s->symbol[s->top]=c;
+	s->top++;
+
+	return;
+}
+
+char* pop(stack* s) {
+	char* temp = s->symbol[s->top];
+	s->top--;
+	return temp;
+}
+
+int stackSize(stack* s) {
+	return s->top;
+}
+
+void printStack(stack* s) {
+	int size = stackSize(s);
+	for (int i = 0; i < size; i++) {
+		printf("%d item:%s\n", i,s->symbol[i]);
+	}
+};
+
+int getIndex(stack* s, char* c) {
+	for (int i = 0; i < stackSize(s); i++) {
+		if (strcmp(s->symbol[i], c)==0) {
+			return i;
+		}
+	}
+	return -1;
+
+}
+
+int exist(stack* s,char * c){
+	if(getIndex(s,c)==-1)
+		return 0;
+	return 1;
+
+}

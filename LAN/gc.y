@@ -15,16 +15,16 @@ void yyerror(char *);
 	char  ID;
 }
 
-%token NL IF THEN  FI CMA CLN MOD POW AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END LP RP
+%token ADD SUB MUL DIV POW NL IF THEN  FI CMA CLN MOD  AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END LP RP
 %left ADD SUB
 %left MUL DIV 
 %token NOT 
 %token <INT> NUM TRUE FALSE 
 %token <ast> IDF
-%type <ast>   STMTS STMT AEXP  BEXP BTERM 
+%type <ast>   STMTS STMT AEXP TERM BEXP BTERM FACT SING
 %start LAN
 %%
-LAN:STMTS END{printf("=====\n");printStack(symbolTable);printf("=====\n");preorder($1);prog($1);}
+LAN:STMTS END{printf("=====\n");preorder($1);prog($1);}
 ;
 
 STMTS: STMT
@@ -55,16 +55,26 @@ BTERM:TRUE 				{$$=createLeaf(NBOO,$1);}
 ;
 
 //Arithmetic expression grammar
-AEXP:		
-AEXP ADD AEXP	{$$=createNode(NADD,$1,$3);}
-|AEXP SUB AEXP	{$$=createNode(NSUB,$1,$3);}    	
-|AEXP MUL AEXP {$$=createNode(NMUL,$1,$3);}
-|AEXP DIV AEXP {$$=createNode(NDIV,$1,$3);}
-|NUM	{$$=createLeaf(NNUM,$1);}
-|LP AEXP RP	{$$=createNode(AEXP,$2,NULL);}	
-|IDF		
+AEXP:TERM		{$$=createNode(ATERM,$1,NULL);}
+|AEXP ADD TERM	{$$=createNode(NADD,$1,$3);}
+|AEXP SUB TERM	{$$=createNode(NSUB,$1,$3);}   	
 ;
-	
+
+TERM:FACT		{$$=createNode(AFACT,$1,NULL);}
+|TERM MUL FACT {$$=createNode(NMUL,$1,$3);}
+|TERM DIV FACT {$$=createNode(NDIV,$1,$3);}
+;
+
+FACT:SING       {$$=createNode(ASING,$1,NULL);}	
+|FACT POW SING {$$=createNode(NPOW,$1,$3);}	
+;
+
+SING:NUM	{$$=createLeaf(NNUM,$1);}
+|SUB SING {$$=createNode(NUSUB,$2,NULL);}
+|LP AEXP RP	{$$=createNode(AEXP,$2,NULL);}
+|IDF LB AEXP RB {$$=createNode(NARR,$3,NULL);}
+|IDF
+;
 
 %%
 void yyerror(char *str){

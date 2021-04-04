@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #define NODESIZE sizeof(node)
 #define SYMSIZE 100
 
@@ -29,7 +30,9 @@ int exist(stack* s,char * c);
 
 
 //Tree:
-enum nodeType{NNUM,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NGT,NLT,NGE,NLE,NASN,IFES,NWHILE,NBOO,NIDF,ATERM,BTERM,AFACT,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
+enum nodeType{NNUM,NARR,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NUSUB,
+			  NPOW,NGT,NLT,NGE,NLE,NASN,IFES,NWHILE,NBOO,NIDF,
+			  ATERM,BTERM,AFACT,ASING,NEQU,AEXP,BEXP,LEAF,STMT,STMTS};
 
 typedef enum nodeType nodeType;
 struct node

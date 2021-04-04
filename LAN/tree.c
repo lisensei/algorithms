@@ -52,6 +52,8 @@ void preorder(node * root){
 		case NSUB: printf("SUB\n");break;
 		case NMUL: printf("MUL\n");break;
 		case NDIV: printf("DIV\n");break;
+		case NPOW:printf("POWER\n");break;
+		case NUSUB:printf("USUB\n");break;
 		case NSAND:printf("NSAND\n");break;
 		case NSOR:printf("NSOR\n");break;
 		case NNOT:printf("NNOT\n");break;
@@ -65,12 +67,17 @@ void preorder(node * root){
 		case IFES:printf("IFES\n");break;
 		case NWHILE:printf("WHILE\n");break;
 		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
+		case NARR:printf("Araay\n");break;
 		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
 		case NIDF:printf("NIDF:name:%s\n",root->name);break;
 		case NASN:printf("NASN\n");break;
+		case ATERM:printf("ATERM\n");break;
+		case AFACT:printf("AFACT\n");break;
+		case ASING:printf("ASING\n");break;
 		case BTERM:printf("BTERM\n");break;
+
 		default:
-			printf("Unkown type\n");
+			printf("Unkown type,%d\n",root->nodeType);
 	}
 
 	preorder(root->left);
@@ -104,6 +111,8 @@ int eval(node*root){
 		case NSUB: v=eval(root->left)-eval(root->right);break;
 		case NMUL: printf("OP MUL\n");v=eval(root->left)*eval(root->right);break;
 		case NDIV: printf("OP DIV\n");v=eval(root->left)/eval(root->right);break;
+		case NPOW: printf("OP POWER\n");v=pow(eval(root->left),eval(root->right));break;
+		case NUSUB:printf("OP USUB\n");v=-eval(root->left);break;
 		case NNOT:printf("OP NNOT\n");v=!eval(root->left);break;
 		case NSAND:printf("NSAND\n");v=eval(root->left)&&eval(root->right);break;
 		case NSOR:printf("NSOR\n");v=eval(root->left)||eval(root->right);break;
@@ -119,7 +128,10 @@ int eval(node*root){
 		case IFES:if(eval(root->left)){v=eval(root->right);}else{v=eval(root->sibTwo);}break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
-	
+		case ATERM:v=eval(root->left);break;
+		case AFACT:v=eval(root->left);break;
+		case ASING:v=eval(root->left);break;
+		case BTERM:v=eval(root->left);break;
 		default:
 
 			printf("type:%d,Invalid node type\n",root->nodeType);

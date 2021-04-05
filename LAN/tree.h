@@ -38,7 +38,7 @@ typedef struct valueStack{
 enum nodeType{NNUM,NARR,NADD,NSUB,NMUL,NDIV,NSAND,NSOR,NNOT,NUSUB,
 			  NPOW,NGT,NLT,NGE,NLE,NASN,IFES,NWHILE,NBOO,NIDF,
 			  NNLIST,ATERM,BTERM,AFACT,ASING,NEQU,AEXP,BEXP,NIDX,LEAF,
-			  STMT,STMTS};
+			  NELE,STMT,STMTS};
 
 typedef enum nodeType nodeType;
 struct node

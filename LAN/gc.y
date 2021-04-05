@@ -35,7 +35,7 @@ STMTS: STMT
 STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
 |BEXP CLN
 |IDF ASN AEXP CLN	{$$=createNode(NASN,$1,$3);}
-|IDF ASN LC NUMLIST RC {$$=createNode(NARR,$1,$4);}
+|IDF ASN LB NUMLIST RB {$$=createNode(NARR,$1,$4);}
 |IDF LB AEXP RB ASN AEXP CLN {$$=createIDX(NIDX,$1,$3,$6);}
 ;
 
@@ -74,7 +74,7 @@ FACT:SING       {$$=createNode(ASING,$1,NULL);}
 SING:NUM	{$$=createLeaf(NNUM,$1);}
 |SUB SING {$$=createNode(NUSUB,$2,NULL);}
 |LP AEXP RP	{$$=createNode(AEXP,$2,NULL);}
-|IDF LB AEXP RB {$$=createNode(NARR,$1,$3);}
+|IDF LB AEXP RB {$$=createNode(NELE,$1,$3);}
 |IDF
 ;
 

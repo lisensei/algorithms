@@ -37,3 +37,6 @@ int main(int argc, char const *argv[])
 	printArray(valueTree[3]);
 	return 0;
 }
+
+x:=[1,2,3]
+y:=x[2];

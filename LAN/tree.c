@@ -77,6 +77,7 @@ void preorder(node * root){
 		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
 		case NARR:printf("Array\n");break;
 		case NIDX:printf("Array Indexing");break;
+		case NELE:printf("NELE\n");break;
 		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
 		case NIDF:printf("NIDF:name:%s\n",root->name);break;
 		case NASN:printf("NASN\n");break;
@@ -131,13 +132,15 @@ int eval(node*root){
 		case NLT:printf("NLT\n");v=eval(root->left)<eval(root->right);break;
 		case NGE:printf("NGE\n");v=eval(root->left)>=eval(root->right);break;
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
-		case AEXP:v=eval(root->left);break;
+		case AEXP:printf("AEXP\n");v=eval(root->left);break;
 		case BEXP:v=eval(root->left);break;
-		case NASN:v=eval(root->right);node* t=createLeaf(NNUM,v);valueTree[getIndex(symbolTable,root->left->name)]=t;printf("Succeeded\n");break;
+		case NASN:printf("NASN\n");v=eval(root->right);node* t=createLeaf(NNUM,v);valueTree[getIndex(symbolTable,root->left->name)]=t;printf("Succeeded\n");break;
 		//root->dataType is NULL;
-		case NIDF:v=valueTree[getIndex(symbolTable,root->name)]->value;printArray(valueTree[getIndex(symbolTable,root->name)]);break;
+		case NIDF:printf("NIDF\n");v=valueTree[getIndex(symbolTable,root->name)]->value;printArray(valueTree[getIndex(symbolTable,root->name)]);break;
 		case NARR:printf("I ran\n");valueTree[getIndex(symbolTable,root->left->name)]=root->right;break;
 		case NIDX:printf("Updating index:%d with value:%d\n",eval(root->right),eval(root->sibOne));updateNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right),eval(root->sibOne));break;
+		case NELE:printf("AELE\n");
+		v=getNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right));break;
 		case IFES:if(eval(root->left)){v=eval(root->right);}else{v=eval(root->sibTwo);}break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;

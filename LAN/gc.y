@@ -21,10 +21,10 @@ void yyerror(char *);
 %token NOT 
 %token <INT> NUM TRUE FALSE 
 %token <ast> IDF
-%type <ast>   STMTS STMT AEXP TERM BEXP BTERM FACT SING
+%type <ast>   STMTS STMT AEXP TERM BEXP BTERM FACT SING NUMLIST
 %start LAN
 %%
-LAN:STMTS END{printf("=====\n");preorder($1);prog($1);}
+LAN:STMTS END{printf("=====\n");prog($1);}
 ;
 
 STMTS: STMT
@@ -35,6 +35,8 @@ STMTS: STMT
 STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
 |BEXP CLN
 |IDF ASN AEXP CLN	{$$=createNode(NASN,$1,$3);}
+|IDF ASN LC NUMLIST RC {$$=createNode(NARR,$1,$4);}
+|IDF LB AEXP RB ASN AEXP CLN {$$=createIDX(NIDX,$1,$3,$6);}
 ;
 
 
@@ -72,9 +74,14 @@ FACT:SING       {$$=createNode(ASING,$1,NULL);}
 SING:NUM	{$$=createLeaf(NNUM,$1);}
 |SUB SING {$$=createNode(NUSUB,$2,NULL);}
 |LP AEXP RP	{$$=createNode(AEXP,$2,NULL);}
-|IDF LB AEXP RB {$$=createNode(NARR,$3,NULL);}
+|IDF LB AEXP RB {$$=createNode(NARR,$1,$3);}
 |IDF
 ;
+
+NUMLIST:NUM   	  {$$=createLeaf(NNUM,$1);}	
+|NUM CMA NUMLIST {node* n=createLeaf(NNUM,$1);n->left=$3;$$=n;}
+;
+
 
 %%
 void yyerror(char *str){
@@ -87,6 +94,9 @@ int yywrap(){
 
 int main(){
 symbolTable=init();
+for(int i=0;i<SYMSIZE;i++){
+	valueTree[i]=malloc(NODESIZE);
+}
 yyparse();
 printf("exited\n");
 }

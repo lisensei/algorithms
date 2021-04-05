@@ -13,3 +13,27 @@ if x>5->y:=5;[]x<=5 1+1;fi;
 
 x:=6;
 if x>5->y:=1;[]x<=5->y:=2;fi;END
+
+A:={1,2,3,42,5}
+A[2]:=5;
+A;
+
+
+
+
+int main(int argc, char const *argv[])
+{
+	for(int i=0;i<SYMSIZE;i++){
+	valueTree[i]=malloc(NODESIZE);
+	}
+	valueTree[3]->value=1;
+	valueTree[3]->left=createLeaf(NNUM,20);
+	valueTree[3]->left->left=createLeaf(NNUM,21);
+	valueTree[3]->left->left->left=createLeaf(NNUM,42);
+	printArray(valueTree[3]);
+	updateNodeValue(valueTree[3],2,5);
+	printArray(valueTree[3]);
+	updateNodeValue(valueTree[3],3,1212);
+	printArray(valueTree[3]);
+	return 0;
+}

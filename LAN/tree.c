@@ -31,6 +31,14 @@ node* createLeaf(int nt,int val){
 	return  leaf;
 }
 
+node* createIDX(int nt,node* l,node* r,node* s1){
+	node* temp=malloc(NODESIZE);
+	temp->nodeType=nt;
+	temp->left=l;
+	temp->right=r;
+	temp->sibOne=s1;
+	temp->sibTwo=NULL;
+}
 node* createIFES(int nt,node* l,node*r,node*s1,node*s2){
 	node* temp=malloc(NODESIZE);
 	temp->nodeType=nt;
@@ -67,7 +75,8 @@ void preorder(node * root){
 		case IFES:printf("IFES\n");break;
 		case NWHILE:printf("WHILE\n");break;
 		case NNUM:printf("Terminal reached,value:%d\n",root->value);break;
-		case NARR:printf("Araay\n");break;
+		case NARR:printf("Array\n");break;
+		case NIDX:printf("Array Indexing");break;
 		case NBOO:printf("Bool Terminal Reached,value:%d\n",root->value);break;
 		case NIDF:printf("NIDF:name:%s\n",root->name);break;
 		case NASN:printf("NASN\n");break;
@@ -75,6 +84,7 @@ void preorder(node * root){
 		case AFACT:printf("AFACT\n");break;
 		case ASING:printf("ASING\n");break;
 		case BTERM:printf("BTERM\n");break;
+		case NNLIST:printf("NNLIST\n");break;
 
 		default:
 			printf("Unkown type,%d\n",root->nodeType);
@@ -123,8 +133,11 @@ int eval(node*root){
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
 		case AEXP:v=eval(root->left);break;
 		case BEXP:v=eval(root->left);break;
-		case NASN:v=eval(root->right);valueTable[getIndex(symbolTable,root->left->name)]=v;break;
-		case NIDF:v=valueTable[getIndex(symbolTable,root->name)];break;
+		case NASN:v=eval(root->right);node* t=createLeaf(NNUM,v);valueTree[getIndex(symbolTable,root->left->name)]=t;printf("Succeeded\n");break;
+		//root->dataType is NULL;
+		case NIDF:v=valueTree[getIndex(symbolTable,root->name)]->value;printArray(valueTree[getIndex(symbolTable,root->name)]);break;
+		case NARR:printf("I ran\n");valueTree[getIndex(symbolTable,root->left->name)]=root->right;break;
+		case NIDX:printf("Updating index:%d with value:%d\n",eval(root->right),eval(root->sibOne));updateNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right),eval(root->sibOne));break;
 		case IFES:if(eval(root->left)){v=eval(root->right);}else{v=eval(root->sibTwo);}break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
@@ -146,11 +159,13 @@ void prog(node* root){
 	}
 
 	if (root->nodeType!=STMTS){
-		printf("%d:%d\n",root->nodeType,eval(root) );
+		printf("Node type:%d:value:%d\n",root->nodeType,eval(root) );
 		return;
 	 }	
 		prog(root->left);
 		prog(root->right);
+		prog(root->sibOne);
+		prog(root->sibTwo);
 
 }
 
@@ -188,6 +203,10 @@ void printStack(stack* s) {
 };
 
 int getIndex(stack* s, char* c) {
+	if(s==NULL){
+		printf("%s\n","TRIED TO INDEX WITH NULL POINTER" );
+		return 0;
+	}
 	for (int i = 0; i < stackSize(s); i++) {
 		if (strcmp(s->symbol[i], c)==0) {
 			return i;
@@ -202,4 +221,49 @@ int exist(stack* s,char * c){
 		return 0;
 	return 1;
 
+}
+
+
+int getNodeValue(node* root,int index){
+		if(root==NULL){
+			printf("TRIED TO GET NODE VALUE WITH NULL POINTER");
+			return 0;
+		}
+		node* temp=root;
+	for(int i=0;i<index;i++){
+		temp=temp->left;
+	}
+	return temp->value;
+}
+
+void updateNodeValue(node* root,int index,int val){
+		if(root==NULL){
+			printf("NULL POINTER");
+			return;
+		}
+		node* temp=root;
+	for(int i=0;i<index;i++){
+		temp=temp->left;
+	}
+	temp->value=val;
+
+}
+void printArray(node* root){
+		if(root==NULL){
+			printf("%s\n","NULL POINTER" );
+			return;
+		}
+		if(root->left==NULL){
+			printf("%d\n",root->value );
+			return;
+		}
+
+		node* temp=root;
+		printf("%s", "{");
+		while(temp->left!=NULL){
+			printf("%d,",temp->value);
+			temp=temp->left;
+		}
+		printf("%d",temp->value);
+		printf("%s\n","}" );
 }

@@ -24,19 +24,22 @@ void yyerror(char *);
 %type <ast>   STMTS STMT AEXP TERM BEXP BTERM FACT SING NUMLIST
 %start LAN
 %%
-LAN:STMTS END{printf("=====\n");prog($1);}
+LAN:STMTS END{prog($1);}
 ;
 
 STMTS: STMT
 |STMT STMTS {$$=createNode(STMTS,$1,$2);}
-|DO BEXP THEN STMTS OD CLN {$$=createNode(NWHILE,$2,$4);}
-|IF BEXP THEN STMTS LB RB BEXP THEN STMTS FI CLN {$$=createIFES(IFES,$2,$4,$7,$9);}
+
 
 STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
+|PRINT IDF CLN {$$=createNode(NPRT,$2,NULL);}
 |BEXP CLN
 |IDF ASN AEXP CLN	{$$=createNode(NASN,$1,$3);}
-|IDF ASN LB NUMLIST RB {$$=createNode(NARR,$1,$4);}
+|IDF ASN LB NUMLIST RB CLN{$$=createNode(NARR,$1,$4);}
 |IDF LB AEXP RB ASN AEXP CLN {$$=createIDX(NIDX,$1,$3,$6);}
+|DO BEXP THEN STMTS OD CLN {$$=createNode(NWHILE,$2,$4);}
+|IF BEXP THEN STMTS LB RB FI CLN {$$=createIFES(NIF,$2,$4,NULL,NULL);}
+|IF BEXP THEN STMTS LB RB BEXP THEN STMTS FI CLN {$$=createIFES(IFES,$2,$4,$7,$9);}
 ;
 
 

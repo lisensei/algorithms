@@ -86,6 +86,7 @@ void preorder(node * root){
 		case ASING:printf("ASING\n");break;
 		case BTERM:printf("BTERM\n");break;
 		case NNLIST:printf("NNLIST\n");break;
+		case NPRT:printf("NPRT\n");break;
 
 		default:
 			printf("Unkown type,%d\n",root->nodeType);
@@ -132,22 +133,25 @@ int eval(node*root){
 		case NLT:printf("NLT\n");v=eval(root->left)<eval(root->right);break;
 		case NGE:printf("NGE\n");v=eval(root->left)>=eval(root->right);break;
 		case NLE:printf("NLE\n");v=eval(root->left)<=eval(root->right);break;
-		case AEXP:printf("AEXP\n");v=eval(root->left);break;
+		case AEXP:v=eval(root->left);break;
 		case BEXP:v=eval(root->left);break;
-		case NASN:printf("NASN\n");v=eval(root->right);node* t=createLeaf(NNUM,v);valueTree[getIndex(symbolTable,root->left->name)]=t;printf("Succeeded\n");break;
+		case NASN:v=eval(root->right);node* t=createLeaf(NNUM,v);valueTree[getIndex(symbolTable,root->left->name)]=t;break;
 		//root->dataType is NULL;
-		case NIDF:printf("NIDF\n");v=valueTree[getIndex(symbolTable,root->name)]->value;printArray(valueTree[getIndex(symbolTable,root->name)]);break;
-		case NARR:printf("I ran\n");valueTree[getIndex(symbolTable,root->left->name)]=root->right;break;
-		case NIDX:printf("Updating index:%d with value:%d\n",eval(root->right),eval(root->sibOne));updateNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right),eval(root->sibOne));break;
+		case NIDF:v=valueTree[getIndex(symbolTable,root->name)]->value;;break;
+		case NPRT:printf("%s:",root->left->name);printArray(valueTree[getIndex(symbolTable,root->left->name)]);break;
+		case NARR:valueTree[getIndex(symbolTable,root->left->name)]=root->right;break;
+		case NIDX:updateNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right),eval(root->sibOne));break;
 		case NELE:printf("AELE\n");
 		v=getNodeValue(valueTree[getIndex(symbolTable,root->left->name)],eval(root->right));break;
-		case IFES:if(eval(root->left)){v=eval(root->right);}else{v=eval(root->sibTwo);}break;
+		case NIF:if(eval(root->left)){prog(root->right);}break;
+		case IFES:printf("IF ELSE:\n");if(eval(root->left)){prog(root->right);}else{prog(root->sibTwo);}break;
 		case NWHILE:while(eval(root->left)){prog(root->right);};break;
 		case STMT:v=eval(root->left);break;
 		case ATERM:v=eval(root->left);break;
 		case AFACT:v=eval(root->left);break;
 		case ASING:v=eval(root->left);break;
 		case BTERM:v=eval(root->left);break;
+		case STMTS:prog(root->left);break;
 		default:
 
 			printf("type:%d,Invalid node type\n",root->nodeType);
@@ -162,7 +166,7 @@ void prog(node* root){
 	}
 
 	if (root->nodeType!=STMTS){
-		printf("Node type:%d:value:%d\n",root->nodeType,eval(root) );
+		eval(root);
 		return;
 	 }	
 		prog(root->left);

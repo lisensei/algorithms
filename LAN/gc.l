@@ -5,7 +5,7 @@
 void yyerror(char *);
 %}
 %%
-[1-9][0-9]*				  {sscanf(yytext,"%d",&yylval.INT);return NUM;}
+[1-9][0-9]*|0			  {sscanf(yytext,"%d",&yylval.INT);return NUM;}
 "true"	{yylval.INT=1;return TRUE;}
 "false" {yylval.INT=0;return FALSE;}
 "+"     return ADD;

@@ -1,48 +1,32 @@
+TEST 1 (PASSED):
 x:=5;
-y:=6;
-z:=x+y;
-END
-
-x:=5;
-y:=0;
-do x>1->y:=y+x; x:=x-1;od;
-x;
-y;
+y:=1;
+do x>0 -> y:=x*y;
+          x:=x-1
+od;
+print y
 
 
-x:=5;
-y:=0;
-if x=5->do x>1->y:=y+x; x:=x-1;od;[]fi;
-print y;
+TEST 2 (PASSED):
+x:=100;
+y:=100000;
+if x>=y -> z:=x
+[] y>x -> z:=y
+fi;
+print z
 
+TEST 3 (PASSED):
+A:=[12312,3134,235,5435,777,7567,56];
+i:=1;
+n:=7;
+i:=1;
+do i<n -> j:=i;
+          do (j>0)&&(A[j-1]>A[j]) -> t:=A[j];
+                                     A[j]:=A[j-1];
+                                     A[j-1]:=t;
+                                     j:=j-1
+          od;
+          i:=i+1
+od;
+print A
 
-
-x:=6;
-if x>5->y:=1;[]x<=5->y:=2;fi;END
-
-A:=[1,2,3,42,5];
-A[2]:=5;
-A;
-
-
-
-
-int main(int argc, char const *argv[])
-{
-	for(int i=0;i<SYMSIZE;i++){
-	valueTree[i]=malloc(NODESIZE);
-	}
-	valueTree[3]->value=1;
-	valueTree[3]->left=createLeaf(NNUM,20);
-	valueTree[3]->left->left=createLeaf(NNUM,21);
-	valueTree[3]->left->left->left=createLeaf(NNUM,42);
-	printArray(valueTree[3]);
-	updateNodeValue(valueTree[3],2,5);
-	printArray(valueTree[3]);
-	updateNodeValue(valueTree[3],3,1212);
-	printArray(valueTree[3]);
-	return 0;
-}
-
-x:=[1,2,3]
-y:=x[2];

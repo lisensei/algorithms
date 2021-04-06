@@ -15,7 +15,8 @@ void yyerror(char *);
 	char  ID;
 }
 
-%token ADD SUB MUL DIV POW NL IF THEN  FI CMA CLN MOD  AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END LP RP
+%token ADD SUB MUL DIV POW NL IF THEN  FI CMA CLN MOD  AND OR SAND SOR LT GT LE GE ASN LB RB LC RC EQU DO OD PRINT END LP RP ELSE
+
 %left ADD SUB
 %left MUL DIV 
 %token NOT 
@@ -24,22 +25,20 @@ void yyerror(char *);
 %type <ast>   STMTS STMT AEXP TERM BEXP BTERM FACT SING NUMLIST
 %start LAN
 %%
-LAN:STMTS END{prog($1);}
+LAN:STMTS END{prog($1);printf(">:");}
 ;
 
 STMTS: STMT
-|STMT STMTS {$$=createNode(STMTS,$1,$2);}
+|STMT CLN STMTS {$$=createNode(STMTS,$1,$3);}
 
 
-STMT:AEXP CLN	{$$=createNode(AEXP,$1,NULL);}
-|PRINT IDF CLN {$$=createNode(NPRT,$2,NULL);}
-|BEXP CLN
-|IDF ASN AEXP CLN	{$$=createNode(NASN,$1,$3);}
-|IDF ASN LB NUMLIST RB CLN{$$=createNode(NARR,$1,$4);}
-|IDF LB AEXP RB ASN AEXP CLN {$$=createIDX(NIDX,$1,$3,$6);}
-|DO BEXP THEN STMTS OD CLN {$$=createNode(NWHILE,$2,$4);}
-|IF BEXP THEN STMTS LB RB FI CLN {$$=createIFES(NIF,$2,$4,NULL,NULL);}
-|IF BEXP THEN STMTS LB RB BEXP THEN STMTS FI CLN {$$=createIFES(IFES,$2,$4,$7,$9);}
+STMT: PRINT IDF  {$$=createNode(NPRT,$2,NULL);}
+|IDF ASN AEXP 	{$$=createNode(NASN,$1,$3);}
+|IDF ASN LB NUMLIST RB {$$=createNode(NARR,$1,$4);}
+|IDF LB AEXP RB ASN AEXP  {$$=createIDX(NIDX,$1,$3,$6);}
+|DO BEXP THEN STMTS OD  {$$=createNode(NWHILE,$2,$4);}
+|IF BEXP THEN STMTS LB RB FI  {$$=createIFES(NIF,$2,$4,NULL,NULL);}
+|IF BEXP THEN STMTS ELSE BEXP THEN STMTS FI  {$$=createIFES(IFES,$2,$4,$6,$8);}
 ;
 
 
@@ -88,7 +87,7 @@ NUMLIST:NUM   	  {$$=createLeaf(NNUM,$1);}
 
 %%
 void yyerror(char *str){
-	fprintf(stderr,"Error:%s\n",str);
+	fprintf(stderr,"Error:%s\n>:",str);
 }
 
 int yywrap(){
@@ -100,8 +99,12 @@ symbolTable=init();
 for(int i=0;i<SYMSIZE;i++){
 	valueTree[i]=malloc(NODESIZE);
 }
+printf("$GUARDED COMMAND INTERPRETER\n");
+printf("AUTHOR:LI SENSEI\n");
+printf(">:");
+while(1){
 yyparse();
-printf("exited\n");
+}
 }
 
 

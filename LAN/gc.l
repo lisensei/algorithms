@@ -29,20 +29,23 @@ void yyerror(char *);
 "("		return LP;
 ")"		return RP;
 ":="	return ASN;
-"if"	return IF;
 "->"	return THEN;
 "["		return LB;
 "]"		return RB;
+"[]"    return ELSE;
 "{"	    return LC;
 "}"		return RC;
-"fi" 	return FI;
-"do" 	return DO;
-"od"	return OD;
+"if"/[\u00A0 \t \r \n]	return IF;
+"do"/[\u00A0 \t \r \n] 	return DO;
+[\u00A0 \t \r \n]+"fi"	return FI;
+[\u00A0 \t \r \n]+"od"	return OD;
 "END"	return END;
 "print"	return PRINT;
 [a-zA-Z_]+[a-zA-Z0-9_]* {push(symbolTable,strdup(yytext));node* root=createID(NIDF,strdup(yytext));yylval.ast=root;return IDF;}
-\n      
-[ \t]+ 
+[\u00A0]+
+[\t]+
+[\r]+
+[\n]+
 .
 %%
 

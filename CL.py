@@ -22,20 +22,27 @@ with open('metrics_with_curriculum_cl.csv', 'a', newline='') as csvfile:
 #Hyper parameters
 
 parser=argparse.ArgumentParser(description="Learning rate,noise percent and batch size")
+parser.add_argument("-rn",default=3e-3)
 parser.add_argument("-lr",default=3e-3)
 parser.add_argument("-np",default=20)
 parser.add_argument("-bs",default=16)
+parser.add_argument("-mean",default=0)
+parser.add_argument("-std",default=1)
+parser.add_argument("-classes",default=10)
 hp=parser.parse_args()
+runname=hp.rn
 lr=hp.lr
 batchSize=hp.np
 epoch=hp.bs
+mean=hp.mean
+std=hp.std
+number_of_class=hp.classes
 
 
 
 def addPeperNoise(source,percent):
     source = source.squeeze(dim=1)
     for image in source:
-
         for j in range(int(255*percent/100)):
             x = torch.randint(0, 28, (1,))
             y = torch.randint(0, 28, (1,))
@@ -43,8 +50,9 @@ def addPeperNoise(source,percent):
                 image[x, y] = 0
             else:
                 image[x, y] = 255
-
     return source.unsqueeze(dim=1)
+
+
 class TransformNoise:
     def __init__(self):
         self.percent_noise = 0.0
@@ -55,9 +63,10 @@ class TransformNoise:
     def __repr__(self):
         return self.__class__.__name__ + '()'
 
-curriculum_noise = TransformNoise()
+
 
 #Data processing
+curriculum_noise = TransformNoise()
 device= torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 dataTrain=torchvision.datasets.MNIST(root='/data',train=True,transform=transform.Compose(
         [
@@ -70,11 +79,13 @@ dataTest=torchvision.datasets.MNIST(root='/data',train=False,transform=transform
         [
             transform.ToTensor(),
             curriculum_noise,
-            torchvision.transforms.Normalize(mean=0.0, std=1.0)
+            torchvision.transforms.Normalize(mean=mean, std=std)
         ]
     ),download=True)
-trainSet=Data.DataLoader(dataset=Data.TensorDataset(dataTrain.data.to(torch.float32).unsqueeze(dim=1),dataTrain.targets),batch_size=batchSize,shuffle=True)
-testSet=Data.DataLoader(dataset=Data.TensorDataset(dataTest.data.to(torch.float32).unsqueeze(dim=1),dataTest.targets),batch_size=batchSize,shuffle=False)
+trainSet=Data.DataLoader(dataset=Data.TensorDataset(dataTrain.data.to(torch.float32).unsqueeze(dim=1),
+                                                    dataTrain.targets),batch_size=batchSize,shuffle=True)
+testSet=Data.DataLoader(dataset=Data.TensorDataset(dataTest.data.to(torch.float32).unsqueeze(dim=1),
+                                                   dataTest.targets),batch_size=batchSize,shuffle=False)
 
 
 
@@ -105,7 +116,7 @@ class CNN(nn.Module):
         out = self.fc(out)
         return out
 
-net=CNN(10)
+net=CNN(number_of_class)
 loss=nn.CrossEntropyLoss()
 optimizer=torch.optim.Adam(net.parameters(),lr=lr)
 
@@ -116,25 +127,26 @@ if not is_curriculum_enabled:
 
 
 print("Learning rate set to",lr,"Batch size set to",batchSize)
-
 '''Training with curriculum:'''
 print("\n")
 print("Training with curriculum starts:")
+
+
 for ite in range(epoch):
     trainLoss=0
     testLoss=0
     trainCorrect = 0
     net.batchSize=batchSize
-
 # Train F1 variables and confusion matrix declaration
     f1ypred=torch.zeros((10,1))
     f1y=torch.zeros((10,1))
     confusionMat=torch.zeros((10,10))
 
+
     for j,(x,y) in enumerate(trainSet):
         x.to(device)
         y.to(device)
-        ypred=net(x)
+        ypred=net.forward(x)
         ypred=ypred.to(torch.float32)
         temp = torch.argmax(ypred, dim=1)
         for k,v in zip(y,temp):
@@ -142,7 +154,6 @@ for ite in range(epoch):
             f1y[k]+=1
             confusionMat[k,v]+=1
         trainCorrect += ((temp - y) == 0).sum()
-
         l = loss(ypred,y)
         trainLoss+=l
         l.backward()
@@ -185,6 +196,7 @@ for ite in range(epoch):
     f1Test = f1_score(y1Test, y2Test, average='macro')
     testAcc=testCorrect/10000
     print(f'Train loss:{trainLoss.item():.4f}, Train accuracy:{trainAcc.item():.4f},Test loss:{testLoss.item():.4f},Test accuracy:{testAcc.item():.4f},Train F1 score:{f1:.4f},Test F1 score:{f1Test:.4f}')
+
 
     with open('metrics_with_curriculum_cl.csv', 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')

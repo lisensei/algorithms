@@ -10,26 +10,35 @@ import torch.utils
 import torch.utils.data as Data
 import torchvision.models
 import torchvision.transforms as transform
-
+import numpy as np
 # Hyper parameters
 parser = argparse.ArgumentParser(description="Hyper parameters")
-parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=0)
+parser.add_argument("-run_name", default="0")
+parser.add_argument("-sequence_name", default="cl1")
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
+parser.add_argument("-noise_percent", default=0)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 
 hp = parser.parse_args()
-filename = str(hp.run_name)+" "+str(hp.sequence_name) + " metrics_with_curriculum_cl.csv"
+filename = "sequence_" + str(hp.sequence_name) + "_" + "run_name " + str(
+    hp.run_name) + "_" + " metrics_with_curriculum_cl.csv"
+
+sequence_result = "aggregated sequence result " + str(hp.sequence_name)
 with open(filename, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow([str(hp.run_name),str(hp.sequence_name),
+    fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
                      "Epoch", "Train Loss", "Train Accuracy", "Train F1",
                      "Test Loss", "Test Accuracy", "Test F1",
                      "Train Confusion Matrix", "Test Confusition Matrix"])
+
+with open(sequence_result, 'a', newline='') as csvfile:
+    fwrite = csv.writer(csvfile, delimiter=',')
+    fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
+                     "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
 
 
 def addPeperNoise(source, percent):
@@ -152,6 +161,8 @@ is_curriculum_enabled = False
 if not is_curriculum_enabled:
     curriculum_noise.percent_noise = 50
 
+all_metrics = list()
+test_accuracies=torch.zeros((hp.epoches,1))
 for iteration in range(hp.epoches):
     metrics = []
     net.batch_size = hp.batch_size
@@ -170,7 +181,7 @@ for iteration in range(hp.epoches):
             for row, column in zip(y, indices):
                 confusion_matrix_train[row, column] += 1
             train_correct += ((indices - y) == 0).sum()
-            batch_loss = loss(ypredict, y)
+            batch_loss = loss.forward(ypredict, y)
             train_loss += batch_loss
             if dataloader == train_set:
                 batch_loss.backward()
@@ -184,6 +195,9 @@ for iteration in range(hp.epoches):
         metrics.append(train_accuracy)
         metrics.append(f1score_train)
         metrics.append(confusion_matrix_train)
+
+    all_metrics.append(metrics)
+    test_accuracies[iteration] = metrics[5]
     print(
         f'Train loss:{metrics[0]:.4f}, Train accuracy:{metrics[1]:.4f},'
         f'train F1 score:{metrics[2]:.4f},Test loss:{metrics[4]:.4f},'
@@ -192,5 +206,13 @@ for iteration in range(hp.epoches):
     with open(filename, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [hp.run_name,hp.sequence_name,iteration, metrics[0], metrics[1], metrics[2], metrics[3],
+            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, iteration, metrics[0],
+             metrics[1],
+             metrics[2], metrics[3],
              metrics[4], metrics[5], metrics[6], metrics[7]])
+
+at_epoch=torch.argmax(test_accuracies)
+with open(sequence_result, 'a', newline='') as csvfile:
+    fwrite = csv.writer(csvfile, delimiter=',')
+    fwrite.writerow([hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent,
+                             at_epoch, all_metrics[at_epoch][4], all_metrics[at_epoch][5], all_metrics[at_epoch][6]])

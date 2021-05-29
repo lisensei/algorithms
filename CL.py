@@ -13,26 +13,22 @@ import torchvision.transforms as transform
 
 # Hyper parameters
 parser = argparse.ArgumentParser(description="Hyper parameters")
-parser.add_argument("-rn", default=0, help="run name")
-parser.add_argument("-lr", default=3e-3, help="learning rate")
-parser.add_argument("-ne", default=20, help="number of epoch")
-parser.add_argument("-bs", default=16, help="batch size")
-parser.add_argument("-mean", default=0, help="Gaussian nose mean")
-parser.add_argument("-std", default=1, help="Gaussian nose std")
-parser.add_argument("-classes", default=10, help="number of classes")
+parser.add_argument("-run_name", default=0)
+parser.add_argument("-sequence_name", default=0)
+parser.add_argument("-learning_rate", default=3e-3)
+parser.add_argument("-epoches", default=20)
+parser.add_argument("-batch_size", default=16)
+parser.add_argument("-mean", default=0)
+parser.add_argument("-std", default=1)
+parser.add_argument("-classes", default=10)
+
 hp = parser.parse_args()
-runname = hp.rn
-lr = hp.lr
-batchSize = hp.bs
-epoch = hp.ne
-mean = hp.mean
-std = hp.std
-number_of_class = hp.classes
-filename = str(runname) + " metrics_with_curriculum_cl.csv"
+filename = str(hp.run_name)+" "+str(hp.sequence_name) + " metrics_with_curriculum_cl.csv"
 with open(filename, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow(["Epoch", "Train Loss", "Test Loss", "Train Accuracy",
-                     "Test Accuracy", "Train F1", "Test F1",
+    fwrite.writerow([str(hp.run_name),str(hp.sequence_name),
+                     "Epoch", "Train Loss", "Train Accuracy", "Train F1",
+                     "Test Loss", "Test Accuracy", "Test F1",
                      "Train Confusion Matrix", "Test Confusition Matrix"])
 
 
@@ -61,20 +57,20 @@ class TransformNoise:
 
 
 def Fonescore(matrix):
-    n = len(matrix)
-    parameters = torch.zeros((n, 3))
-    for i in range(n):
+    matrix_size = len(matrix)
+    parameters = torch.zeros((matrix_size, 3))
+    for i in range(matrix_size):
         parameters[i][0] = matrix[i, i]
-        for j in range(n):
+        for j in range(matrix_size):
             if j != i:
                 parameters[i][1] += matrix[j, i]
                 parameters[i][2] += matrix[i, j]
 
     precision = 0
     recall = 0
-    for i in range(n):
-        precision += parameters[i][0] / (parameters[i][0] + parameters[i][1]) / n
-        recall += parameters[i][0] / (parameters[i][0] + parameters[i][2]) / n
+    for i in range(matrix_size):
+        precision += parameters[i][0] / (parameters[i][0] + parameters[i][1]) / matrix_size
+        recall += parameters[i][0] / (parameters[i][0] + parameters[i][2]) / matrix_size
 
     f1score = 2 * precision * recall / (precision + recall)
     return f1score
@@ -94,15 +90,15 @@ data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=tran
     [
         transform.ToTensor(),
         curriculum_noise,
-        torchvision.transforms.Normalize(mean=mean, std=std)
+        torchvision.transforms.Normalize(mean=hp.mean, std=hp.std)
     ]
 ), download=True)
 train_set = Data.DataLoader(
     dataset=Data.TensorDataset(data_train.data.to(torch.float32).unsqueeze(dim=1),
-                               data_train.targets), batch_size=batchSize, shuffle=True)
+                               data_train.targets), batch_size=hp.batch_size, shuffle=True)
 test_set = Data.DataLoader(
     dataset=Data.TensorDataset(data_test.data.to(torch.float32).unsqueeze(dim=1),
-                               data_test.targets), batch_size=batchSize, shuffle=False)
+                               data_test.targets), batch_size=hp.batch_size, shuffle=False)
 
 
 class ResBlock(nn.Module):
@@ -127,7 +123,7 @@ class ResBlock(nn.Module):
 
 class ResNet(nn.Module):
     def __init__(self, number_of_class):
-        self.batchSize = batchSize
+        self.batch_size = hp.batch_size
         super(ResNet, self).__init__()
         self.layers = nn.Sequential(
             ResBlock(1, 2, 4),
@@ -144,76 +140,57 @@ class ResNet(nn.Module):
         out = self.layers.forward(x)
         out = self.cov(out)
         out = self.relu(out)
-        out = out.reshape(self.batchSize, 28 * 28 * 8)
+        out = out.reshape(self.batch_size, 28 * 28 * 8)
         out = self.linear_layer.forward(out)
         return out
 
 
-net = ResNet(number_of_class)
+net = ResNet(hp.classes)
 loss = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
 is_curriculum_enabled = False
 if not is_curriculum_enabled:
     curriculum_noise.percent_noise = 50
 
-for iteration in range(epoch):
-    train_loss = 0
-    test_loss = 0
-    train_correct = 0
-    net.batchSize = batchSize
+for iteration in range(hp.epoches):
+    metrics = []
+    net.batch_size = hp.batch_size
+
     # Train F1 variables and confusion matrix declaration
     confusion_matrix_train = torch.zeros((10, 10))
-
-    for j, (x, y) in enumerate(train_set):
-        x = x.to(device)
-        y = y.to(device)
-        ypredict = net.forward(x)
-        ypredict = ypredict.to(torch.float32)
-        temp = torch.argmax(ypredict, dim=1)
-        for k, v in zip(y, temp):
-            confusion_matrix_train[k, v] += 1
-        train_correct += ((temp - y) == 0).sum()
-        l = loss(ypredict, y)
-        train_loss += l
-        l.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        if j % 1000 == 0:
-            print("epoch:", iteration, "batch:", j, "Loss:", l.item())
-    train_accuracy = train_correct / 60000
-    if is_curriculum_enabled:
-        if epoch % 10 == 0:
-            curriculum_noise.percent_noise += 10
-    # Calculate Train F1
-    f1score_train = Fonescore(confusion_matrix_train)
-    print(f1score_train.item())
-
-    # Test F1 variables and confusion matrix declaration
-    confusion_matrix_test = torch.zeros((10, 10))
-    test_correct = 0
-    with torch.no_grad():
-        for i in range(1):
-            for j, (x, y) in enumerate(test_set):
-                x = x.to(device)
-                y = y.to(device)
-                net.batchSize = batchSize
-                ypredict = net.forward(x)
-                l = loss(ypredict, y)
-                test_loss += l
-                temp = torch.argmax(ypredict, dim=1)
-                for k, v in zip(y, temp):
-                    confusion_matrix_test[k, v] += 1
-                test_correct += ((temp - y) == 0).sum()
-    test_accuracy = test_correct / 10000
-    f1score_test = Fonescore(confusion_matrix_test)
-    print(f1score_test.item())
+    for i, dataloader in enumerate([train_set, test_set]):
+        train_loss = 0
+        train_correct = 0
+        confusion_matrix_train = torch.zeros((10, 10))
+        for j, (x, y) in enumerate(dataloader):
+            x = x.to(device)
+            y = y.to(device)
+            ypredict = net.forward(x).to(torch.float32)
+            indices = torch.argmax(ypredict, dim=1)
+            for row, column in zip(y, indices):
+                confusion_matrix_train[row, column] += 1
+            train_correct += ((indices - y) == 0).sum()
+            batch_loss = loss(ypredict, y)
+            train_loss += batch_loss
+            if dataloader == train_set:
+                batch_loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+            if j % 1000 == 0:
+                print("epoch:", iteration, "batch:", j, "Loss:", batch_loss.item())
+        train_accuracy = train_correct / len(dataloader.dataset)
+        f1score_train = Fonescore(confusion_matrix_train)
+        metrics.append(train_loss)
+        metrics.append(train_accuracy)
+        metrics.append(f1score_train)
+        metrics.append(confusion_matrix_train)
     print(
-        f'Train loss:{train_loss.item():.4f}, Train accuracy:{train_accuracy.item():.4f},Test loss:{test_loss.item():.4f},Test accuracy:{test_accuracy.item():.4f},Train F1 score:{f1score_train:.4f},Test F1 score:{f1score_test:.4f}')
+        f'Train loss:{metrics[0]:.4f}, Train accuracy:{metrics[1]:.4f},'
+        f'train F1 score:{metrics[2]:.4f},Test loss:{metrics[4]:.4f},'
+        f'Test accuracy:{metrics[5]:.4f},Test f1 score:{metrics[6]:.4f}')
 
     with open(filename, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [iteration, train_loss.item(), test_loss.item(), train_accuracy.item(), test_accuracy.item(), f1score_train,
-             f1score_test,
-             confusion_matrix_train,
-             confusion_matrix_test])
+            [hp.run_name,hp.sequence_name,iteration, metrics[0], metrics[1], metrics[2], metrics[3],
+             metrics[4], metrics[5], metrics[6], metrics[7]])

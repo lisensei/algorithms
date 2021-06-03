@@ -1,5 +1,6 @@
 import argparse
 import csv
+import random
 
 import torch
 import torch.nn as nn
@@ -10,8 +11,8 @@ import torch.utils
 import torch.utils.data as Data
 import torchvision.models
 import torchvision.transforms as transform
-import numpy as np
-# Hyper parameters
+
+'''Argparse hyper parameters'''
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default="0")
 parser.add_argument("-sequence_name", default="cl1")
@@ -22,36 +23,64 @@ parser.add_argument("-noise_percent", default=0)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
-
+parser.add_argument("-curriculum", default=False)
 hp = parser.parse_args()
-filename = "sequence_" + str(hp.sequence_name) + "_" + "run_name " + str(
-    hp.run_name) + "_" + " metrics_with_curriculum_cl.csv"
 
-sequence_result = "aggregated sequence result " + str(hp.sequence_name)
+if hp.curriculum:
+    postfix = "with curriculum.csv"
+else:
+    postfix = "without curriculum.csv"
+'''Sequence file and sequences file'''
+filename = "sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    hp.run_name) + "_" + postfix
+sequence_result = "summary of sequence " + str(hp.sequence_name) + ".csv"
 with open(filename, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
     fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
-                     "Epoch", "Train Loss", "Train Accuracy", "Train F1",
+                     "Epoch", "Curriculum", "Train Loss", "Train Accuracy", "Train F1",
                      "Test Loss", "Test Accuracy", "Test F1",
                      "Train Confusion Matrix", "Test Confusition Matrix"])
 
 with open(sequence_result, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
+    fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
                      "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
 
+'''Pepper Noise Function'''
 
-def addPeperNoise(source, percent):
+
+def addPepperNoise(source, percent):
     source = source.squeeze(dim=1)
-    for image in source:
-        for j in range(int(255 * percent / 100)):
-            x = torch.randint(0, 28, (1,))
-            y = torch.randint(0, 28, (1,))
-            if (x + y) % 2 == 0:
-                image[x, y] = 0
+    if percent >= 100:
+        percent = 100
+
+    for i, image in enumerate(source):
+        polluted_pixels = random.sample(range(0, 28 * 28), int(percent / 100 * 28 * 28))
+        for i in range(len(polluted_pixels)):
+            row = int(polluted_pixels[i] / 28)
+            col = polluted_pixels[i] % 28
+            if (row + col) % 2 == 0:
+                image[row][col] = 0
             else:
-                image[x, y] = 255
-    return source.unsqueeze(dim=1)
+                image[row][col] = 255.0
+    return source
+
+
+def applyNoise():
+    global training_data
+    global training_target
+    global train_set
+    global test_set
+    training_data = torch.clone(data_train.data)
+    training_target = torch.clone(data_train.targets)
+    training_data = addPepperNoise(training_data, curriculum_noise.percent_noise)
+    train_set = Data.DataLoader(
+        dataset=Data.TensorDataset(training_data.to(torch.float32).unsqueeze(dim=1),
+                                   training_target), batch_size=hp.batch_size, shuffle=True)
+    test_set = Data.DataLoader(
+        dataset=Data.TensorDataset(data_test.data.to(torch.float32).unsqueeze(dim=1),
+                                   data_test.targets), batch_size=hp.batch_size, shuffle=False)
+    print("Noise applied")
 
 
 class TransformNoise:
@@ -59,13 +88,16 @@ class TransformNoise:
         self.percent_noise = 0.0
 
     def __call__(self, x):
-        return addPeperNoise(x, self.percent_noise)
+        return addPepperNoise(x, self.percent_noise)
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
 
 
-def Fonescore(matrix):
+'''F1 Score function'''
+
+
+def fonescore(matrix):
     matrix_size = len(matrix)
     parameters = torch.zeros((matrix_size, 3))
     for i in range(matrix_size):
@@ -85,26 +117,26 @@ def Fonescore(matrix):
     return f1score
 
 
-# Data processing
+'''Data processing'''
 curriculum_noise = TransformNoise()
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = "cuda" if torch.cuda.is_available() else "cpu"
 data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
     [
         transform.ToTensor(),
-        curriculum_noise,
-        torchvision.transforms.Normalize(mean=0.0, std=1.0)
     ]
 ), download=True)
+
 data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
     [
         transform.ToTensor(),
-        curriculum_noise,
-        torchvision.transforms.Normalize(mean=hp.mean, std=hp.std)
     ]
 ), download=True)
+
+training_data = torch.clone(data_train.data)
+training_target = torch.clone(data_train.targets)
 train_set = Data.DataLoader(
-    dataset=Data.TensorDataset(data_train.data.to(torch.float32).unsqueeze(dim=1),
-                               data_train.targets), batch_size=hp.batch_size, shuffle=True)
+    dataset=Data.TensorDataset(training_data.to(torch.float32).unsqueeze(dim=1),
+                               training_target), batch_size=hp.batch_size, shuffle=True)
 test_set = Data.DataLoader(
     dataset=Data.TensorDataset(data_test.data.to(torch.float32).unsqueeze(dim=1),
                                data_test.targets), batch_size=hp.batch_size, shuffle=False)
@@ -154,20 +186,28 @@ class ResNet(nn.Module):
         return out
 
 
+'''ResNet with 10 classes'''
 net = ResNet(hp.classes)
 loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
-is_curriculum_enabled = False
-if not is_curriculum_enabled:
-    curriculum_noise.percent_noise = 50
-
+if hp.curriculum:
+    curriculum_noise.percent_noise = 0
+else:
+    curriculum_noise.percent_noise = 5
+    applyNoise()
+''' metrics array holds metrics of each epoch
+    all_metrics holds all metrics from all epochs
+    at_epoch holds the index of the epoch that the
+    best test accuracy occurred
+'''
 all_metrics = list()
-test_accuracies=torch.zeros((hp.epoches,1))
-for iteration in range(hp.epoches):
+test_accuracies = torch.zeros((hp.epoches, 1))
+for epoch in range(hp.epoches):
     metrics = []
     net.batch_size = hp.batch_size
-
-    # Train F1 variables and confusion matrix declaration
+    if hp.curriculum:
+        curriculum_noise.percent_noise += 2
+        applyNoise()
     confusion_matrix_train = torch.zeros((10, 10))
     for i, dataloader in enumerate([train_set, test_set]):
         train_loss = 0
@@ -188,16 +228,16 @@ for iteration in range(hp.epoches):
                 optimizer.step()
                 optimizer.zero_grad()
             if j % 1000 == 0:
-                print("epoch:", iteration, "batch:", j, "Loss:", batch_loss.item())
+                print("epoch:", epoch, "batch:", j, "Loss:", batch_loss.item())
         train_accuracy = train_correct / len(dataloader.dataset)
-        f1score_train = Fonescore(confusion_matrix_train)
+        f1score_train = fonescore(confusion_matrix_train)
         metrics.append(train_loss)
         metrics.append(train_accuracy)
         metrics.append(f1score_train)
         metrics.append(confusion_matrix_train)
 
     all_metrics.append(metrics)
-    test_accuracies[iteration] = metrics[5]
+    test_accuracies[epoch] = metrics[5]
     print(
         f'Train loss:{metrics[0]:.4f}, Train accuracy:{metrics[1]:.4f},'
         f'train F1 score:{metrics[2]:.4f},Test loss:{metrics[4]:.4f},'
@@ -206,13 +246,13 @@ for iteration in range(hp.epoches):
     with open(filename, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, iteration, metrics[0],
+            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum, epoch,
+             metrics[0],
              metrics[1],
              metrics[2], metrics[3],
              metrics[4], metrics[5], metrics[6], metrics[7]])
-
-at_epoch=torch.argmax(test_accuracies)
+at_epoch = torch.argmax(test_accuracies)
 with open(sequence_result, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow([hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent,
-                             at_epoch, all_metrics[at_epoch][4], all_metrics[at_epoch][5], all_metrics[at_epoch][6]])
+    fwrite.writerow([hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
+                     at_epoch, all_metrics[at_epoch][4], all_metrics[at_epoch][5], all_metrics[at_epoch][6]])

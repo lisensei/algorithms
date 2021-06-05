@@ -3,6 +3,8 @@ import csv
 import os
 import random
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.utils
@@ -12,21 +14,45 @@ import torch.utils
 import torch.utils.data as Data
 import torchvision.models
 import torchvision.transforms as transform
+from torch.utils.tensorboard import SummaryWriter
 
 '''Argparse hyper parameters'''
+
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
 parser.add_argument("-sequence_name", default="cl1")
 parser.add_argument("-learning_rate", default=3e-3)
-parser.add_argument("-epoches", default=10)
+parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
 parser.add_argument("-noise_percent", default=0)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=6000)
+parser.add_argument("-samples", default=1000)
 hp = parser.parse_args()
+
+
+class DataVisualize():
+    def __init__(self, path):
+        self.writer = SummaryWriter(path)
+
+    def add_to_tensorboard(self, figure, step):
+        self.writer.add_figure(tag="confusion matrix", figure=figure, global_step=step)
+
+    def plot_matrix(self, matrix):
+        figure = plt.figure()
+        plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
+        plt.xticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+        plt.yticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+        for row in range(len(matrix)):
+            for column in range(len(matrix)):
+                plt.annotate(str(matrix[row, column]), xy=(column, row),
+                             horizontalalignment="center",
+                             verticalalignment="center")
+        plt.xlabel("Predicted")
+        plt.ylabel("True")
+        return figure
 
 
 if hp.curriculum:
@@ -41,9 +67,9 @@ if not os.path.exists(filename):
     with open(filename, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
-                         "Epoch", "Curriculum", "Train Loss", "Train Accuracy", "Train F1",
+                         "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
                          "Test Loss", "Test Accuracy", "Test F1"])
-if not os.path.exists(filename):
+if not os.path.exists(sequence_result):
     with open(sequence_result, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
@@ -143,6 +169,8 @@ train_set = Data.DataLoader(
 test_set = Data.DataLoader(
     dataset=Data.TensorDataset(data_test.data.to(torch.float32).unsqueeze(dim=1),
                                data_test.targets), batch_size=hp.batch_size, shuffle=False)
+path = "runs/mnist_sequence_0"
+visualizer = DataVisualize(path)
 
 
 class ResBlock(nn.Module):
@@ -196,7 +224,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
 if hp.curriculum:
     curriculum_noise.percent_noise = 0
 else:
-    curriculum_noise.percent_noise = 22.5
+    curriculum_noise.percent_noise = 40
     applyNoise()
 ''' metrics array holds metrics of each epoch
     all_metrics holds all metrics from all epochs
@@ -244,6 +272,11 @@ for epoch in range(hp.epoches):
             metrics["test_accuracy"] = train_accuracy.item()
             metrics["test_f1score"] = f1score_train.item()
             metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
+
+    fig_train = visualizer.plot_matrix(metrics["train_confusion_matrix"])
+    fig_test = visualizer.plot_matrix(metrics["test_confusion_matrix"])
+    visualizer.add_to_tensorboard(fig_train, epoch)
+    visualizer.add_to_tensorboard(fig_test, epoch)
     all_metrics.append(metrics)
     test_accuracies[epoch] = metrics["test_accuracy"]
     print(
@@ -259,9 +292,10 @@ for epoch in range(hp.epoches):
              metrics["train_accuracy"],
              metrics["train_f1score"],
              metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"]])
-at_epoch = torch.argmax(test_accuracies)
+at_epoch = torch.argmax(test_accuracies).item()
 with open(sequence_result, 'a', newline='') as csvfile:
     fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow([hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
-                     at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
-                     all_metrics[at_epoch]["test_f1score"]])
+    fwrite.writerow(
+        [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
+         at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
+         all_metrics[at_epoch]["test_f1score"]])

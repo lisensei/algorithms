@@ -29,148 +29,132 @@ parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=1000)
-hp = parser.parse_args()
+parser.add_argument("-samples", default=6180)
+hp = parser.parse_args(args=[])
+
+'''This class is used to send data to tensorboard'''
 
 
-class DataVisualize():
-    def __init__(self, path):
-        self.writer = SummaryWriter(path)
+class DataVisualizer:
+    def __init__(self, log_path):
+        self.writer = SummaryWriter(log_path)
 
-    def add_to_tensorboard(self, figure, step):
+    def addToTensorboard(self, figure, step):
         self.writer.add_figure(tag="confusion matrix", figure=figure, global_step=step)
 
-    def plot_matrix(self, matrix):
-        figure = plt.figure()
-        plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
-        plt.xticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-        plt.yticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-        for row in range(len(matrix)):
-            for column in range(len(matrix)):
-                plt.annotate(str(matrix[row, column]), xy=(column, row),
-                             horizontalalignment="center",
-                             verticalalignment="center")
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
+    def plotMatrix(self, matrices):
+        figure = plt.figure(figsize=[10, 5])
+
+        for i in range(2):
+            matrix = matrices[i]
+            plt.subplot(1, 2, i + 1)
+            if i == 0:
+                plt.title("Training Set Confusion Matrix")
+            else:
+                plt.title("Test Set Confusion Matrix")
+            plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
+            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.yticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            for row in range(len(matrix[i])):
+                for column in range(len(matrix)):
+                    plt.annotate(str(int(matrix[row, column])), xy=(column, row),
+                                 horizontalalignment="center",
+                                 verticalalignment="center")
+            plt.xlabel("Predicted")
+            plt.ylabel("True")
         return figure
 
 
-if hp.curriculum:
-    postfix = "with curriculum.csv"
-else:
-    postfix = "without curriculum.csv"
-'''Sequence file and sequences file'''
-filename = "sequence " + str(hp.sequence_name) + "_" + "run " + str(
-    hp.run_name) + "_" + postfix
-sequence_result = "summary of sequence " + str(hp.sequence_name) + ".csv"
-if not os.path.exists(filename):
-    with open(filename, 'a', newline='') as csvfile:
-        fwrite = csv.writer(csvfile, delimiter=',')
-        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
-                         "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
-                         "Test Loss", "Test Accuracy", "Test F1"])
-if not os.path.exists(sequence_result):
-    with open(sequence_result, 'a', newline='') as csvfile:
-        fwrite = csv.writer(csvfile, delimiter=',')
-        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
-                         "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
-
-'''Pepper Noise Function'''
+'''This class is used to process dataset,such as adding noise'''
 
 
-def addPepperNoise(source, percent):
-    source = source.squeeze(dim=1)
-    if percent >= 100:
-        percent = 100
+class DataProcessor:
+    def __init__(self, samples):
+        self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
+            [
+                transform.ToTensor()
+            ]
+        ), download=True)
 
-    for i, image in enumerate(source):
-        polluted_pixels = random.sample(range(0, 28 * 28), int(percent / 100 * 28 * 28))
-        for i in range(len(polluted_pixels)):
-            row = int(polluted_pixels[i] / 28)
-            col = polluted_pixels[i] % 28
-            if (row + col) % 2 == 0:
-                image[row][col] = 0
-            else:
-                image[row][col] = 255.0
-    return source
+        self.data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
+            [
+                transform.ToTensor(),
+            ]
+        ), download=True)
+        self.train_data = self.data_train.data[0:samples]
+        self.train_target = self.data_train.targets[0:samples]
+        self.train_set = Data.DataLoader(
+            dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
+                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+        self.test_set = Data.DataLoader(
+            dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
+                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
 
+    def repack(self):
+        self.train_set = Data.DataLoader(
+            dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
+                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+        self.test_set = Data.DataLoader(
+            dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
+                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
 
-def applyNoise():
-    global train_set
-    data_train, _ = generate_dataset()
-    training_data = data_train.data[0:hp.samples]
-    training_target = data_train.targets[0:hp.samples]
-    training_data = addPepperNoise(training_data, curriculum_noise.percent_noise)
-    train_set = Data.DataLoader(
-        dataset=Data.TensorDataset(training_data.to(torch.float32).unsqueeze(dim=1),
-                                   training_target), batch_size=hp.batch_size, shuffle=True)
+    def getDataset(self, ):
+        return self.train_set, self.test_set
 
+    def addPepperNoise(self, percent):
+        self.resetDataset()
+        source = self.train_data
+        source = source.squeeze(dim=1)
+        if percent >= 100:
+            percent = 100
 
-class TransformNoise:
-    def __init__(self):
-        self.percent_noise = 0.0
+        for i, image in enumerate(source):
+            polluted_pixels = random.sample(range(0, 28 * 28), int(percent / 100 * 28 * 28))
+            for i in range(len(polluted_pixels)):
+                row = int(polluted_pixels[i] / 28)
+                col = polluted_pixels[i] % 28
+                if (row + col) % 2 == 0:
+                    image[row][col] = 0
+                else:
+                    image[row][col] = 255.0
+        self.repack()
 
-    def __call__(self, x):
-        return addPepperNoise(x, self.percent_noise)
+    def resetDataset(self):
+        self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
+            [
+                transform.ToTensor()
+            ]
+        ), download=True)
 
-    def __repr__(self):
-        return self.__class__.__name__ + '()'
-
-
-'''F1 Score function'''
-
-
-def fonescore(matrix):
-    matrix_size = len(matrix)
-    parameters = torch.zeros((matrix_size, 3))
-    for i in range(matrix_size):
-        parameters[i][0] = matrix[i, i]
-        for j in range(matrix_size):
-            if j != i:
-                parameters[i][1] += matrix[j, i]
-                parameters[i][2] += matrix[i, j]
-
-    precision = 0
-    recall = 0
-    for i in range(matrix_size):
-        precision += parameters[i][0] / (parameters[i][0] + parameters[i][1]) / matrix_size
-        recall += parameters[i][0] / (parameters[i][0] + parameters[i][2]) / matrix_size
-
-    f1score = 2 * precision * recall / (precision + recall)
-    return f1score
-
-
-'''Data processing'''
-
-
-def generate_dataset():
-    data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
-        [
-            transform.ToTensor()
-        ]
-    ), download=True)
-
-    data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
-        [
-            transform.ToTensor(),
-        ]
-    ), download=True)
-    return data_train, data_test
+        self.data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
+            [
+                transform.ToTensor(),
+            ]
+        ), download=True)
 
 
-curriculum_noise = TransformNoise()
-device = "cuda" if torch.cuda.is_available() else "cpu"
-data_train, data_test = generate_dataset()
-training_data = data_train.data[0:hp.samples]
-training_target = data_train.targets[0:hp.samples]
-train_set = Data.DataLoader(
-    dataset=Data.TensorDataset(training_data.to(torch.float32).unsqueeze(dim=1),
-                               training_target), batch_size=hp.batch_size, shuffle=True)
-test_set = Data.DataLoader(
-    dataset=Data.TensorDataset(data_test.data.to(torch.float32).unsqueeze(dim=1),
-                               data_test.targets), batch_size=hp.batch_size, shuffle=False)
-path = "runs/mnist_sequence_0"
-visualizer = DataVisualize(path)
+'''This class is used to make statistical calculations such as calculate F1 score'''
+
+
+class StatisticalAnalyzer:
+    def fonescore(self, matrix):
+        matrix_size = len(matrix)
+        parameters = torch.zeros((matrix_size, 3))
+        for i in range(matrix_size):
+            parameters[i][0] = matrix[i, i]
+            for j in range(matrix_size):
+                if j != i:
+                    parameters[i][1] += matrix[j, i]
+                    parameters[i][2] += matrix[i, j]
+
+        precision = 0
+        recall = 0
+        for i in range(matrix_size):
+            precision += parameters[i][0] / (parameters[i][0] + parameters[i][1]) / matrix_size
+            recall += parameters[i][0] / (parameters[i][0] + parameters[i][2]) / matrix_size
+
+        f1score = 2 * precision * recall / (precision + recall)
+        return f1score
 
 
 class ResBlock(nn.Module):
@@ -217,15 +201,44 @@ class ResNet(nn.Module):
         return out
 
 
+'''define necessary variables and file names'''
+if hp.curriculum:
+    postfix = "with curriculum.csv"
+else:
+    postfix = "without curriculum.csv"
+
+filename = "sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    hp.run_name) + "_" + postfix
+sequence_result = "summary of sequence " + str(hp.sequence_name) + ".csv"
+
+if not os.path.exists(filename):
+    with open(filename, 'a', newline='') as csvfile:
+        fwrite = csv.writer(csvfile, delimiter=',')
+        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
+                         "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
+                         "Test Loss", "Test Accuracy", "Test F1"])
+if not os.path.exists(sequence_result):
+    with open(sequence_result, 'a', newline='') as csvfile:
+        fwrite = csv.writer(csvfile, delimiter=',')
+        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
+                         "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
+
+curriculum_noise = 0
+device = "cuda" if torch.cuda.is_available() else "cpu"
+log_path = "runs/mnist_sequence_0"
+processor = DataProcessor(hp.samples)
+visualizer = DataVisualizer(log_path)
+analyzer = StatisticalAnalyzer()
 '''ResNet with 10 classes'''
 net = ResNet(hp.classes)
 loss = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
 if hp.curriculum:
-    curriculum_noise.percent_noise = 0
+    curriculum_noise = 0
 else:
-    curriculum_noise.percent_noise = 40
-    applyNoise()
+    curriculum_noise = 15
+    processor.addPepperNoise(curriculum_noise)
+
 ''' metrics array holds metrics of each epoch
     all_metrics holds all metrics from all epochs
     at_epoch holds the index of the epoch that the
@@ -237,10 +250,10 @@ for epoch in range(hp.epoches):
     metrics = dict()
     net.batch_size = hp.batch_size
     if hp.curriculum:
-        curriculum_noise.percent_noise += 2
-        applyNoise()
+        curriculum_noise += 2
+        processor.addPepperNoise(curriculum_noise)
     confusion_matrix_train = torch.zeros((10, 10))
-    for i, dataloader in enumerate([train_set, test_set]):
+    for i, dataloader in enumerate([processor.train_set, processor.test_set]):
         train_loss = 0
         train_correct = 0
         confusion_matrix_train = torch.zeros((10, 10))
@@ -254,15 +267,14 @@ for epoch in range(hp.epoches):
             train_correct += ((indices - y) == 0).sum()
             batch_loss = loss.forward(ypredict, y)
             train_loss += batch_loss
-            if dataloader == train_set:
+            if dataloader == processor.train_set:
                 batch_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            if j % 10 == 0 and j % hp.batch_size == 0 and j != 0:
-                print("epoch:", epoch, "batch:", j / 16, "Loss:", batch_loss.item())
+
         train_accuracy = train_correct / len(dataloader.dataset)
-        f1score_train = fonescore(confusion_matrix_train)
-        if dataloader == train_set:
+        f1score_train = analyzer.fonescore(confusion_matrix_train)
+        if dataloader == processor.train_set:
             metrics["train_loss"] = train_loss.item()
             metrics["train_accuracy"] = train_accuracy.item()
             metrics["train_f1score"] = f1score_train.item()
@@ -273,16 +285,16 @@ for epoch in range(hp.epoches):
             metrics["test_f1score"] = f1score_train.item()
             metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
 
-    fig_train = visualizer.plot_matrix(metrics["train_confusion_matrix"])
-    fig_test = visualizer.plot_matrix(metrics["test_confusion_matrix"])
-    visualizer.add_to_tensorboard(fig_train, epoch)
-    visualizer.add_to_tensorboard(fig_test, epoch)
+    fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
+
+    visualizer.addToTensorboard(fig, epoch)
+
     all_metrics.append(metrics)
     test_accuracies[epoch] = metrics["test_accuracy"]
-    print(
-        f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
-        f'train F1 score:{metrics["train_f1score"]:.4f},Test loss:{metrics["test_loss"]:.4f},'
-        f'Test accuracy:{metrics["test_accuracy"]:.4f},Test f1 score:{metrics["test_f1score"]:.4f}')
+    print(f'Epoch:{epoch} '
+          f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
+          f'train F1 score:{metrics["train_f1score"]:.4f},Test loss:{metrics["test_loss"]:.4f},'
+          f'Test accuracy:{metrics["test_accuracy"]:.4f},Test f1 score:{metrics["test_f1score"]:.4f}')
 
     with open(filename, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')

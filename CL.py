@@ -29,7 +29,7 @@ parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=6180)
+parser.add_argument("-samples", default=1000)
 hp = parser.parse_args(args=[])
 
 '''This class is used to send data to tensorboard'''
@@ -70,6 +70,7 @@ class DataVisualizer:
 
 class DataProcessor:
     def __init__(self, samples):
+        self.samples = samples
         self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -81,8 +82,8 @@ class DataProcessor:
                 transform.ToTensor(),
             ]
         ), download=True)
-        self.train_data = self.data_train.data[0:samples]
-        self.train_target = self.data_train.targets[0:samples]
+        self.train_data = torch.clone(self.data_train.data[0:samples])
+        self.train_target = torch.clone(self.data_train.targets[0:samples])
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
                                        self.train_target), batch_size=hp.batch_size, shuffle=True)
@@ -103,12 +104,11 @@ class DataProcessor:
 
     def addPepperNoise(self, percent):
         self.resetDataset()
-        source = self.train_data
-        source = source.squeeze(dim=1)
+        self.train_data.squeeze(dim=1)
         if percent >= 100:
             percent = 100
 
-        for i, image in enumerate(source):
+        for i, image in enumerate(self.train_data):
             polluted_pixels = random.sample(range(0, 28 * 28), int(percent / 100 * 28 * 28))
             for i in range(len(polluted_pixels)):
                 row = int(polluted_pixels[i] / 28)
@@ -120,17 +120,8 @@ class DataProcessor:
         self.repack()
 
     def resetDataset(self):
-        self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
-            [
-                transform.ToTensor()
-            ]
-        ), download=True)
-
-        self.data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
-            [
-                transform.ToTensor(),
-            ]
-        ), download=True)
+        self.train_data = torch.clone(self.data_train.data[0:self.samples])
+        self.train_target = torch.clone(self.data_train.targets[0:self.samples])
 
 
 '''This class is used to make statistical calculations such as calculate F1 score'''
@@ -201,113 +192,114 @@ class ResNet(nn.Module):
         return out
 
 
-'''define necessary variables and file names'''
-if hp.curriculum:
-    postfix = "with curriculum.csv"
-else:
-    postfix = "without curriculum.csv"
+for runs in range(30):
+    hp.run_name = runs
+    if hp.curriculum:
+        postfix = "with curriculum.csv"
+    else:
+        postfix = "without curriculum.csv"
 
-filename = "sequence " + str(hp.sequence_name) + "_" + "run " + str(
-    hp.run_name) + "_" + postfix
-sequence_result = "summary of sequence " + str(hp.sequence_name) + ".csv"
+    filename = "metrics/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+        hp.run_name) + "_" + postfix
+    sequence_result = "metrics/summary of sequence " + str(hp.sequence_name) + ".csv"
 
-if not os.path.exists(filename):
-    with open(filename, 'a', newline='') as csvfile:
-        fwrite = csv.writer(csvfile, delimiter=',')
-        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
-                         "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
-                         "Test Loss", "Test Accuracy", "Test F1"])
-if not os.path.exists(sequence_result):
+    if not os.path.exists(filename):
+        with open(filename, 'a+', newline='') as csvfile:
+            fwrite = csv.writer(csvfile, delimiter=',')
+            fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
+                             "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
+                             "Test Loss", "Test Accuracy", "Test F1"])
+    if not os.path.exists(sequence_result):
+        with open(sequence_result, 'a+', newline='') as csvfile:
+            fwrite = csv.writer(csvfile, delimiter=',')
+            fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
+                             "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
+
+    hp.noise_percent = 0
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    log_path = "runs/mnist_sequence_0"
+    processor = DataProcessor(hp.samples)
+    visualizer = DataVisualizer(log_path)
+    analyzer = StatisticalAnalyzer()
+    '''ResNet with 10 classes'''
+    net = ResNet(hp.classes)
+    loss = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
+    if hp.curriculum:
+        hp.noise_percent = 0
+    else:
+        hp.noise_percent = 40
+        processor.addPepperNoise(hp.noise_percent)
+
+    ''' metrics array holds metrics of each epoch
+        all_metrics holds all metrics from all epochs
+        at_epoch holds the index of the epoch that the
+        best test accuracy occurred
+    '''
+    all_metrics = list()
+    test_accuracies = torch.zeros((hp.epoches, 1))
+    for epoch in range(hp.epoches):
+        metrics = dict()
+        net.batch_size = hp.batch_size
+        if hp.curriculum:
+            hp.noise_percent += 2
+            processor.addPepperNoise(hp.noise_percent)
+        confusion_matrix_train = torch.zeros((10, 10))
+        for i, dataloader in enumerate([processor.train_set, processor.test_set]):
+            train_loss = 0
+            train_correct = 0
+            confusion_matrix_train = torch.zeros((10, 10))
+            for j, (x, y) in enumerate(dataloader):
+                x = x.to(device)
+                y = y.to(device)
+                ypredict = net.forward(x).to(torch.float32)
+                indices = torch.argmax(ypredict, dim=1)
+                for row, column in zip(y, indices):
+                    confusion_matrix_train[row, column] += 1
+                train_correct += ((indices - y) == 0).sum()
+                batch_loss = loss.forward(ypredict, y)
+                train_loss += batch_loss
+                if dataloader == processor.train_set:
+                    batch_loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+            train_accuracy = train_correct / len(dataloader.dataset)
+            f1score_train = analyzer.fonescore(confusion_matrix_train)
+            if dataloader == processor.train_set:
+                metrics["train_loss"] = train_loss.item()
+                metrics["train_accuracy"] = train_accuracy.item()
+                metrics["train_f1score"] = f1score_train.item()
+                metrics["train_confusion_matrix"] = confusion_matrix_train.numpy()
+            else:
+                metrics["test_loss"] = train_loss.item()
+                metrics["test_accuracy"] = train_accuracy.item()
+                metrics["test_f1score"] = f1score_train.item()
+                metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
+
+        fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
+
+        visualizer.addToTensorboard(fig, epoch)
+
+        all_metrics.append(metrics)
+        test_accuracies[epoch] = metrics["test_accuracy"]
+        print(f'Epoch:{epoch},Run:{hp.run_name},'
+              f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
+              f'train F1 score:{metrics["train_f1score"]:.4f},Test loss:{metrics["test_loss"]:.4f},'
+              f'Test accuracy:{metrics["test_accuracy"]:.4f},Test f1 score:{metrics["test_f1score"]:.4f}')
+
+        with open(filename, 'a', newline='') as csvfile:
+            fwrite = csv.writer(csvfile, delimiter=',')
+            fwrite.writerow(
+                [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum, epoch,
+                 metrics["train_loss"],
+                 metrics["train_accuracy"],
+                 metrics["train_f1score"],
+                 metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"]])
+    at_epoch = torch.argmax(test_accuracies).item()
     with open(sequence_result, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
-        fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
-                         "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
-
-curriculum_noise = 0
-device = "cuda" if torch.cuda.is_available() else "cpu"
-log_path = "runs/mnist_sequence_0"
-processor = DataProcessor(hp.samples)
-visualizer = DataVisualizer(log_path)
-analyzer = StatisticalAnalyzer()
-'''ResNet with 10 classes'''
-net = ResNet(hp.classes)
-loss = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
-if hp.curriculum:
-    curriculum_noise = 0
-else:
-    curriculum_noise = 15
-    processor.addPepperNoise(curriculum_noise)
-
-''' metrics array holds metrics of each epoch
-    all_metrics holds all metrics from all epochs
-    at_epoch holds the index of the epoch that the
-    best test accuracy occurred
-'''
-all_metrics = list()
-test_accuracies = torch.zeros((hp.epoches, 1))
-for epoch in range(hp.epoches):
-    metrics = dict()
-    net.batch_size = hp.batch_size
-    if hp.curriculum:
-        curriculum_noise += 2
-        processor.addPepperNoise(curriculum_noise)
-    confusion_matrix_train = torch.zeros((10, 10))
-    for i, dataloader in enumerate([processor.train_set, processor.test_set]):
-        train_loss = 0
-        train_correct = 0
-        confusion_matrix_train = torch.zeros((10, 10))
-        for j, (x, y) in enumerate(dataloader):
-            x = x.to(device)
-            y = y.to(device)
-            ypredict = net.forward(x).to(torch.float32)
-            indices = torch.argmax(ypredict, dim=1)
-            for row, column in zip(y, indices):
-                confusion_matrix_train[row, column] += 1
-            train_correct += ((indices - y) == 0).sum()
-            batch_loss = loss.forward(ypredict, y)
-            train_loss += batch_loss
-            if dataloader == processor.train_set:
-                batch_loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-
-        train_accuracy = train_correct / len(dataloader.dataset)
-        f1score_train = analyzer.fonescore(confusion_matrix_train)
-        if dataloader == processor.train_set:
-            metrics["train_loss"] = train_loss.item()
-            metrics["train_accuracy"] = train_accuracy.item()
-            metrics["train_f1score"] = f1score_train.item()
-            metrics["train_confusion_matrix"] = confusion_matrix_train.numpy()
-        else:
-            metrics["test_loss"] = train_loss.item()
-            metrics["test_accuracy"] = train_accuracy.item()
-            metrics["test_f1score"] = f1score_train.item()
-            metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
-
-    fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
-
-    visualizer.addToTensorboard(fig, epoch)
-
-    all_metrics.append(metrics)
-    test_accuracies[epoch] = metrics["test_accuracy"]
-    print(f'Epoch:{epoch} '
-          f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
-          f'train F1 score:{metrics["train_f1score"]:.4f},Test loss:{metrics["test_loss"]:.4f},'
-          f'Test accuracy:{metrics["test_accuracy"]:.4f},Test f1 score:{metrics["test_f1score"]:.4f}')
-
-    with open(filename, 'a', newline='') as csvfile:
-        fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum, epoch,
-             metrics["train_loss"],
-             metrics["train_accuracy"],
-             metrics["train_f1score"],
-             metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"]])
-at_epoch = torch.argmax(test_accuracies).item()
-with open(sequence_result, 'a', newline='') as csvfile:
-    fwrite = csv.writer(csvfile, delimiter=',')
-    fwrite.writerow(
-        [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
-         at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
-         all_metrics[at_epoch]["test_f1score"]])
+            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
+             at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
+             all_metrics[at_epoch]["test_f1score"]])

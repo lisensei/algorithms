@@ -23,11 +23,11 @@ drive.mount('/gdrive')
 os.chdir('/gdrive/My Drive/CL/')
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default="cl1")
+parser.add_argument("-sequence_name", default=9)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=40)
+parser.add_argument("-noise_percent", default=30)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
@@ -56,8 +56,8 @@ class DataVisualizer:
             else:
                 plt.title("Test Set Confusion Matrix")
             plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
-            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-            plt.yticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['0','1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.yticks(list(np.linspace(0, 9, 10)), ['0','1', '2', '3', '4', '5', '6', '7', '8', '9'])
             for row in range(len(matrix[i])):
                 for column in range(len(matrix)):
                     plt.annotate(str(int(matrix[row, column])), xy=(column, row),
@@ -204,9 +204,9 @@ for runs in range(30):
     else:
         postfix = "without curriculum.csv"
     '''Sequence file and sequences file'''
-    filename = "/gdrive/My Drive/CL/" + hp.sequence_name + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "/gdrive/My Drive/CL/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "/gdrive/My Drive/CL/" + hp.sequence_name + "/summary of sequence " + str(
+    sequence_result = "/gdrive/My Drive/CL/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
     if not os.path.exists(filename):
         with open(filename, 'w', newline='') as csvfile:
@@ -223,13 +223,14 @@ for runs in range(30):
     hp.run_name = runs
     running_noise = 0
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "runs/mnist_sequence_0"
+    log_path = "runs/mnist/sequence "+str(hp.sequence_name)+"/sequence "+str(hp.sequence_name)+"_run "+str(hp.run_name)
     processor = DataProcessor(hp.samples)
     visualizer = DataVisualizer(log_path)
     analyzer = StatisticalAnalyzer()
     '''ResNet with 10 classes'''
     net = ResNet(hp.classes)
-    net.cuda()
+    if torch.cuda.is_available():
+      net.cuda()
     loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
     if hp.curriculum:
@@ -249,7 +250,7 @@ for runs in range(30):
         metrics = dict()
         net.batch_size = hp.batch_size
         if hp.curriculum:
-            running_noise += 2
+            running_noise += hp.noise_percent/hp.epoches
             processor.addPepperNoise(running_noise)
         confusion_matrix_train = torch.zeros((10, 10))
         for i, dataloader in enumerate([processor.train_set, processor.test_set]):

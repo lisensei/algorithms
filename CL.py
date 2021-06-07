@@ -20,11 +20,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default="cl1")
+parser.add_argument("-sequence_name", default="test")
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=0)
+parser.add_argument("-noise_percent", default=30)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
@@ -53,8 +53,8 @@ class DataVisualizer:
             else:
                 plt.title("Test Set Confusion Matrix")
             plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
-            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-            plt.yticks(list(np.linspace(0, 9, 10)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.yticks(list(np.linspace(0, 9, 10)), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
             for row in range(len(matrix[i])):
                 for column in range(len(matrix)):
                     plt.annotate(str(int(matrix[row, column])), xy=(column, row),
@@ -199,25 +199,25 @@ for runs in range(30):
     else:
         postfix = "without curriculum.csv"
 
-    filename = "metrics/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "metrics/summary of sequence " + str(hp.sequence_name) + ".csv"
+    sequence_result = "metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):
-        with open(filename, 'a+', newline='') as csvfile:
+        with open(filename, 'w+', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
                              "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
                              "Test Loss", "Test Accuracy", "Test F1"])
     if not os.path.exists(sequence_result):
-        with open(sequence_result, 'a+', newline='') as csvfile:
+        with open(sequence_result, 'w+', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
                              "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
 
-    hp.noise_percent = 0
+    running_noise = 0
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "runs/mnist_sequence_0"
+    log_path = "runs/mnist/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(hp.run_name)
     processor = DataProcessor(hp.samples)
     visualizer = DataVisualizer(log_path)
     analyzer = StatisticalAnalyzer()
@@ -226,10 +226,10 @@ for runs in range(30):
     loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
     if hp.curriculum:
-        hp.noise_percent = 0
+        running_noise = 0
     else:
-        hp.noise_percent = 40
-        processor.addPepperNoise(hp.noise_percent)
+        running_noise = hp.noise_percent
+        processor.addPepperNoise(running_noise)
 
     ''' metrics array holds metrics of each epoch
         all_metrics holds all metrics from all epochs
@@ -242,8 +242,8 @@ for runs in range(30):
         metrics = dict()
         net.batch_size = hp.batch_size
         if hp.curriculum:
-            hp.noise_percent += 2
-            processor.addPepperNoise(hp.noise_percent)
+            running_noise += hp.noise_percent / hp.epoches
+            processor.addPepperNoise(running_noise)
         confusion_matrix_train = torch.zeros((10, 10))
         for i, dataloader in enumerate([processor.train_set, processor.test_set]):
             train_loss = 0
@@ -283,15 +283,15 @@ for runs in range(30):
 
         all_metrics.append(metrics)
         test_accuracies[epoch] = metrics["test_accuracy"]
-        print(f'Epoch:{epoch},Run:{hp.run_name},'
-              f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
+        print(f'Epoch:{epoch},Run:{hp.run_name},current noise:{running_noise},'
+              f'Train loss:{metrics["train_loss"]:.4f},Train accuracy:{metrics["train_accuracy"]:.4f},'
               f'train F1 score:{metrics["train_f1score"]:.4f},Test loss:{metrics["test_loss"]:.4f},'
               f'Test accuracy:{metrics["test_accuracy"]:.4f},Test f1 score:{metrics["test_f1score"]:.4f}')
 
         with open(filename, 'a', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(
-                [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum, epoch,
+                [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum, epoch,
                  metrics["train_loss"],
                  metrics["train_accuracy"],
                  metrics["train_f1score"],
@@ -300,6 +300,6 @@ for runs in range(30):
     with open(sequence_result, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, hp.noise_percent, hp.curriculum,
+            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum,
              at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
              all_metrics[at_epoch]["test_f1score"]])

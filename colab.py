@@ -2,7 +2,6 @@ import argparse
 import csv
 import os
 import random
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -23,11 +22,11 @@ drive.mount('/gdrive')
 os.chdir('/gdrive/My Drive/CL/')
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=9)
+parser.add_argument("-sequence_name", default=20)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=30)
+parser.add_argument("-noise_percent", default=20)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
@@ -56,8 +55,8 @@ class DataVisualizer:
             else:
                 plt.title("Test Set Confusion Matrix")
             plt.imshow(matrix, interpolation="nearest", cmap=plt.get_cmap("Blues"))
-            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['0','1', '2', '3', '4', '5', '6', '7', '8', '9'])
-            plt.yticks(list(np.linspace(0, 9, 10)), ['0','1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.xticks(list(np.linspace(0, 9, 10, dtype=int)), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+            plt.yticks(list(np.linspace(0, 9, 10)), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
             for row in range(len(matrix[i])):
                 for column in range(len(matrix)):
                     plt.annotate(str(int(matrix[row, column])), xy=(column, row),
@@ -198,46 +197,51 @@ class ResNet(nn.Module):
 
 
 for runs in range(30):
+    hp.run_name = runs
+    running_noise = 0
+    torch.manual_seed(hp.run_name)
+    random.seed(hp.run_name)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    log_path = "runs/mnist/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+        hp.run_name)
+    processor = DataProcessor(hp.samples)
+    visualizer = DataVisualizer(log_path)
+    analyzer = StatisticalAnalyzer()
     '''define necessary variables and file names'''
     if hp.curriculum:
+        running_noise = 0
         postfix = "with curriculum.csv"
     else:
+        running_noise = hp.noise_percent
+        processor.addPepperNoise(running_noise)
         postfix = "without curriculum.csv"
     '''Sequence file and sequences file'''
-    filename = "/gdrive/My Drive/CL/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "/gdrive/My Drive/CL/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(
+        hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
     sequence_result = "/gdrive/My Drive/CL/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
     if not os.path.exists(filename):
-        with open(filename, 'w', newline='') as csvfile:
+        with open(filename, 'a', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
                              "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
                              "Test Loss", "Test Accuracy", "Test F1"])
+
     if not os.path.exists(sequence_result):
-        with open(sequence_result, 'w', newline='') as csvfile:
+        with open(sequence_result, 'a', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
-                             "At Epoch", "Best Test Loss", "Best Test Accuracy", "Test F1"])
+                             "Best Train Accuracy", "Mean Train Accuracy", "Best Test Loss", "Best Test Accuracy",
+                             "Mean test accuracy", "Test F1"])
 
-    hp.run_name = runs
-    running_noise = 0
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "runs/mnist/sequence "+str(hp.sequence_name)+"/sequence "+str(hp.sequence_name)+"_run "+str(hp.run_name)
-    processor = DataProcessor(hp.samples)
-    visualizer = DataVisualizer(log_path)
-    analyzer = StatisticalAnalyzer()
     '''ResNet with 10 classes'''
     net = ResNet(hp.classes)
     if torch.cuda.is_available():
-      net.cuda()
+        net.cuda()
+        torch.cuda.manual_seed(hp.run_name)
     loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
-    if hp.curriculum:
-        running_noise = 0
-    else:
-        running_noise = hp.noise_percent
-        processor.addPepperNoise(running_noise)
 
     ''' metrics array holds metrics of each epoch
         all_metrics holds all metrics from all epochs
@@ -245,12 +249,13 @@ for runs in range(30):
         best test accuracy occurred
     '''
     all_metrics = list()
+    train_accuracies = torch.zeros((hp.epoches, 1))
     test_accuracies = torch.zeros((hp.epoches, 1))
     for epoch in range(hp.epoches):
         metrics = dict()
         net.batch_size = hp.batch_size
         if hp.curriculum:
-            running_noise += hp.noise_percent/hp.epoches
+            running_noise += hp.noise_percent / hp.epoches
             processor.addPepperNoise(running_noise)
         confusion_matrix_train = torch.zeros((10, 10))
         for i, dataloader in enumerate([processor.train_set, processor.test_set]):
@@ -285,11 +290,12 @@ for runs in range(30):
                 metrics["test_f1score"] = f1score_train.item()
                 metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
         fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]],
-                                    show_figure=True)
+                                    show_figure=False)
 
         visualizer.addToTensorboard(fig, epoch)
 
         all_metrics.append(metrics)
+        train_accuracies[epoch] = metrics["train_accuracy"]
         test_accuracies[epoch] = metrics["test_accuracy"]
         print(f'Epoch:{epoch}, Run:{hp.run_name},Current noise Percent:{running_noise}\n'
               f'Train loss:{metrics["train_loss"]:.4f}, Train accuracy:{metrics["train_accuracy"]:.4f},'
@@ -304,10 +310,16 @@ for runs in range(30):
                  metrics["train_accuracy"],
                  metrics["train_f1score"],
                  metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"]])
-    at_epoch = torch.argmax(test_accuracies).item()
+    at_epoch_train = torch.argmax(train_accuracies).item()
+    at_epoch_test = torch.argmax(test_accuracies).item()
+    mean_train_accuracy = torch.mean(train_accuracies).item()
+    mean_test_accuracy = torch.mean(test_accuracies).item()
     with open(sequence_result, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
             [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum,
-             at_epoch, all_metrics[at_epoch]["test_loss"], all_metrics[at_epoch]["test_accuracy"],
-             all_metrics[at_epoch]["test_f1score"]])
+             str(all_metrics[at_epoch_train]["train_accuracy"]) + " at epoch:" + str(at_epoch_train),
+             mean_train_accuracy,
+             all_metrics[at_epoch_test]["test_loss"],
+             str(all_metrics[at_epoch_test]["test_accuracy"]) + " at epoch:" + str(at_epoch_test),
+             mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"]])

@@ -20,16 +20,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=0)
+parser.add_argument("-sequence_name", default=5)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=30)
+parser.add_argument("-noise_percent", default=5)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
-parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=6000)
+parser.add_argument("-curriculum", default=True)
+parser.add_argument("-samples", default=1000)
 hp = parser.parse_args(args=[])
 
 '''This class is used to send data to tensorboard'''
@@ -192,6 +192,9 @@ class ResNet(nn.Module):
         return out
 
 
+processor = DataProcessor(hp.samples)
+if not hp.curriculum:
+    processor.addPepperNoise(hp.noise_percent)
 for runs in range(30):
     hp.run_name = runs
     running_noise = 0
@@ -200,15 +203,15 @@ for runs in range(30):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     log_path = "runs/mnist/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
         hp.run_name)
-    processor = DataProcessor(hp.samples)
+
     visualizer = DataVisualizer(log_path)
     analyzer = StatisticalAnalyzer()
     if hp.curriculum:
         running_noise = 0
+        processor.addPepperNoise(running_noise)
         postfix = "with curriculum.csv"
     else:
         running_noise = hp.noise_percent
-        processor.addPepperNoise(running_noise)
         postfix = "without curriculum.csv"
 
     filename = "metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
@@ -285,7 +288,7 @@ for runs in range(30):
         fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
 
         visualizer.addToTensorboard(fig, epoch)
-
+        plt.close("all")
         all_metrics.append(metrics)
         train_accuracies[epoch] = metrics["train_accuracy"]
         test_accuracies[epoch] = metrics["test_accuracy"]

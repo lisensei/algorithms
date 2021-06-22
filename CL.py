@@ -3,7 +3,9 @@ import csv
 import os
 import random
 
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('agg')
 import numpy as np
 import torch
 import torch.nn as nn
@@ -20,11 +22,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=5)
+parser.add_argument("-sequence_name", default=9)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=5)
+parser.add_argument("-noise_percent", default=9)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
@@ -69,8 +71,11 @@ class DataVisualizer:
 
 
 class DataProcessor:
-    def __init__(self, samples):
-        self.samples = samples
+    def __init__(self, samples, valset_size=10000):
+        if samples >= 50000:
+            print("can't get more than 50000 training images")
+            return
+        self.train_samples = samples
         self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -82,14 +87,20 @@ class DataProcessor:
                 transform.ToTensor(),
             ]
         ), download=True)
-        self.train_data = torch.clone(self.data_train.data[0:samples])
-        self.train_target = torch.clone(self.data_train.targets[0:samples])
+        start_index = len(self.data_train) - valset_size
+        self.train_data = torch.clone(self.data_train.data[0:self.train_samples])
+        self.train_target = torch.clone(self.data_train.targets[0:self.train_samples])
+        self.validation_data = torch.clone(self.data_train.data[start_index:])
+        self.validation_target = torch.clone(self.data_train.targets[start_index:])
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
                                        self.train_target), batch_size=hp.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
                                        self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+        self.validation_set = Data.DataLoader(
+            dataset=Data.TensorDataset(self.validation_data.to(torch.float32).unsqueeze(dim=1),
+                                       self.validation_target), batch_size=hp.batch_size, shuffle=True)
 
     def repack(self):
         self.train_set = Data.DataLoader(
@@ -120,8 +131,8 @@ class DataProcessor:
         self.repack()
 
     def resetDataset(self):
-        self.train_data = torch.clone(self.data_train.data[0:self.samples])
-        self.train_target = torch.clone(self.data_train.targets[0:self.samples])
+        self.train_data = torch.clone(self.data_train.data[0:self.train_samples])
+        self.train_target = torch.clone(self.data_train.targets[0:self.train_samples])
 
 
 '''This class is used to make statistical calculations such as calculate F1 score'''
@@ -224,13 +235,15 @@ for runs in range(30):
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent",
                              "Curriculum", "Epoch", "Train Loss", "Train Accuracy", "Train F1",
-                             "Test Loss", "Test Accuracy", "Test F1"])
+                             "Test Loss", "Test Accuracy", "Test F1", "Validation Accuracy", "Validation F1"])
     if not os.path.exists(sequence_result):
         with open(sequence_result, 'w+', newline='') as csvfile:
             fwrite = csv.writer(csvfile, delimiter=',')
-            fwrite.writerow(["Sequence", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
-                             "Best Train Accuracy", "Mean Train Accuracy", "Best Test Loss",
-                             "Best Test Accuracy", "Mean test accuracy", "Test F1"])
+            fwrite.writerow(
+                ["Sequence", "repeat_id", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
+                 "Best Train Accuracy", "Mean Train Accuracy",
+                 "Best Test Accuracy", "Mean test accuracy", "Test F1", "Validation Accuracy",
+                 "Validation F1"])
 
     '''ResNet with 10 classes'''
     net = ResNet(hp.classes)
@@ -248,12 +261,17 @@ for runs in range(30):
     test_accuracies = torch.zeros((hp.epoches, 1))
     for epoch in range(hp.epoches):
         metrics = dict()
+        metrics["validation_accuracy"] = 0
+        metrics["validation_f1score"] = 0
         net.batch_size = hp.batch_size
         if hp.curriculum:
             running_noise += hp.noise_percent / hp.epoches
             processor.addPepperNoise(running_noise)
         confusion_matrix_train = torch.zeros((10, 10))
-        for i, dataloader in enumerate([processor.train_set, processor.test_set]):
+        datasets = [processor.train_set, processor.test_set]
+        if epoch == hp.epoches - 1:
+            datasets.append(processor.validation_set)
+        for i, dataloader in enumerate(datasets):
             train_loss = 0
             train_correct = 0
             confusion_matrix_train = torch.zeros((10, 10))
@@ -279,11 +297,14 @@ for runs in range(30):
                 metrics["train_accuracy"] = train_accuracy.item()
                 metrics["train_f1score"] = f1score_train.item()
                 metrics["train_confusion_matrix"] = confusion_matrix_train.numpy()
-            else:
+            elif dataloader == processor.test_set:
                 metrics["test_loss"] = train_loss.item()
                 metrics["test_accuracy"] = train_accuracy.item()
                 metrics["test_f1score"] = f1score_train.item()
                 metrics["test_confusion_matrix"] = confusion_matrix_train.numpy()
+            else:
+                metrics["validation_accuracy"] = train_accuracy.item()
+                metrics["validation_f1score"] = f1score_train.item()
 
         fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
 
@@ -304,7 +325,8 @@ for runs in range(30):
                  metrics["train_loss"],
                  metrics["train_accuracy"],
                  metrics["train_f1score"],
-                 metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"]])
+                 metrics["test_loss"], metrics["test_accuracy"], metrics["test_f1score"],
+                 metrics["validation_accuracy"], metrics["validation_f1score"]])
     at_epoch_train = torch.argmax(train_accuracies).item()
     at_epoch_test = torch.argmax(test_accuracies).item()
     mean_train_accuracy = torch.mean(train_accuracies).item()
@@ -312,7 +334,8 @@ for runs in range(30):
     with open(sequence_result, 'a', newline='') as csvfile:
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
-            [hp.sequence_name, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum,
+            [hp.sequence_name, runs, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum,
              str(all_metrics[at_epoch_train]["train_accuracy"]) + " at epoch:" + str(at_epoch_train),
              mean_train_accuracy, str(all_metrics[at_epoch_test]["test_accuracy"]) + " at epoch:" + str(at_epoch_test),
-             mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"]])
+             mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"], metrics["validation_accuracy"],
+             metrics["validation_f1score"]])

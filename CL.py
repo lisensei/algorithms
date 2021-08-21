@@ -5,6 +5,7 @@ import random
 
 import matplotlib
 import matplotlib.pyplot as plt
+
 matplotlib.use('agg')
 import numpy as np
 import torch
@@ -22,15 +23,15 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=9)
+parser.add_argument("-sequence_name", default=35)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=9)
+parser.add_argument("-noise_percent", default=35)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
-parser.add_argument("-curriculum", default=True)
+parser.add_argument("-curriculum", default=False)
 parser.add_argument("-samples", default=1000)
 hp = parser.parse_args(args=[])
 
@@ -206,7 +207,7 @@ class ResNet(nn.Module):
 processor = DataProcessor(hp.samples)
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
-for runs in range(30):
+for runs in range(10):
     hp.run_name = runs
     running_noise = 0
     torch.manual_seed(hp.run_name)
@@ -241,8 +242,8 @@ for runs in range(30):
             fwrite = csv.writer(csvfile, delimiter=',')
             fwrite.writerow(
                 ["Sequence", "repeat_id", "Run Name", "Learning Rate", "Batch Size", "Noise Percent", "Curriculum",
-                 "Best Train Accuracy", "Mean Train Accuracy",
-                 "Best Test Accuracy", "Mean test accuracy", "Test F1", "Validation Accuracy",
+                 "Best Train Accuracy", "At Epoch", "Mean Train Accuracy",
+                 "Best Test Accuracy", "At Epoch", "Mean test accuracy", "Test F1", "Validation Accuracy",
                  "Validation F1"])
 
     '''ResNet with 10 classes'''
@@ -335,7 +336,7 @@ for runs in range(30):
         fwrite = csv.writer(csvfile, delimiter=',')
         fwrite.writerow(
             [hp.sequence_name, runs, hp.run_name, hp.learning_rate, hp.batch_size, running_noise, hp.curriculum,
-             str(all_metrics[at_epoch_train]["train_accuracy"]) + " at epoch:" + str(at_epoch_train),
-             mean_train_accuracy, str(all_metrics[at_epoch_test]["test_accuracy"]) + " at epoch:" + str(at_epoch_test),
+             all_metrics[at_epoch_train]["train_accuracy"], at_epoch_train,
+             mean_train_accuracy, all_metrics[at_epoch_test]["test_accuracy"], str(at_epoch_test),
              mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"], metrics["validation_accuracy"],
              metrics["validation_f1score"]])

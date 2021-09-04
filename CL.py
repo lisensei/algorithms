@@ -23,16 +23,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=35)
+parser.add_argument("-sequence_name", default=10)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=35)
+parser.add_argument("-noise_percent", default=10)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=1000)
+parser.add_argument("-samples", default=1/60)
 hp = parser.parse_args(args=[])
 
 '''This class is used to send data to tensorboard'''
@@ -72,11 +72,8 @@ class DataVisualizer:
 
 
 class DataProcessor:
-    def __init__(self, samples, valset_size=10000):
-        if samples >= 50000:
-            print("can't get more than 50000 training images")
-            return
-        self.train_samples = samples
+    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
+
         self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -88,7 +85,10 @@ class DataProcessor:
                 transform.ToTensor(),
             ]
         ), download=True)
-        start_index = len(self.data_train) - valset_size
+        max_samples = len(self.data_train.data)
+        self.train_samples = int(max_samples * trainset_size)
+        self.val_samples = int(max_samples * valset_size)
+        start_index = 60000 - self.val_samples
         self.train_data = torch.clone(self.data_train.data[0:self.train_samples])
         self.train_target = torch.clone(self.data_train.targets[0:self.train_samples])
         self.validation_data = torch.clone(self.data_train.data[start_index:])

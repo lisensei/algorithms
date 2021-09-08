@@ -27,13 +27,13 @@ parser.add_argument("-sequence_name", default=10)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=10)
+parser.add_argument("-noise_percent", default=10,type=int)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
-parser.add_argument("-curriculum", default=False)
+parser.add_argument("-curriculum", default=True)
 parser.add_argument("-samples", default=1/60)
-hp = parser.parse_args(args=[])
+hp = parser.parse_args()
 
 '''This class is used to send data to tensorboard'''
 
@@ -74,13 +74,13 @@ class DataVisualizer:
 class DataProcessor:
     def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
 
-        self.data_train = torchvision.datasets.MNIST(root='/data', train=True, transform=transform.Compose(
+        self.data_train = torchvision.datasets.MNIST(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
             ]
         ), download=True)
 
-        self.data_test = torchvision.datasets.MNIST(root='/data', train=False, transform=transform.Compose(
+        self.data_test = torchvision.datasets.MNIST(root='./data', train=False, transform=transform.Compose(
             [
                 transform.ToTensor(),
             ]
@@ -204,16 +204,17 @@ class ResNet(nn.Module):
         return out
 
 
+torch.manual_seed(hp.run_name)
+random.seed(hp.run_name)
 processor = DataProcessor(hp.samples)
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):
     hp.run_name = runs
     running_noise = 0
-    torch.manual_seed(hp.run_name)
-    random.seed(hp.run_name)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "runs/mnist/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+    log_path = "results/experiment_mnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
         hp.run_name)
 
     visualizer = DataVisualizer(log_path)
@@ -226,9 +227,9 @@ for runs in range(10):
         running_noise = hp.noise_percent
         postfix = "without curriculum.csv"
 
-    filename = "metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
+    sequence_result = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):
@@ -248,6 +249,8 @@ for runs in range(10):
 
     '''ResNet with 10 classes'''
     net = ResNet(hp.classes)
+    if torch.cuda.is_available():
+        net.cuda()
     loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
 

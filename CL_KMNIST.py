@@ -74,12 +74,12 @@ class DataVisualizer:
 class DataProcessor:
     def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
 
-        self.data_train = torchvision.datasets.MNIST(root='./data', train=True, transform=transform.Compose(
+        self.data_train = torchvision.datasets.KMNIST(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
             ]
         ), download=True)
-        self.data_test = torchvision.datasets.MNIST(root='./data', train=False, transform=transform.Compose(
+        self.data_test = torchvision.datasets.KMNIST(root='./data', train=False, transform=transform.Compose(
             [
                 transform.ToTensor(),
             ]
@@ -213,7 +213,7 @@ for runs in range(10):
     running_noise = 0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "results/experiment_mnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+    log_path = "results/experiment_kmnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
         hp.run_name)
 
     visualizer = DataVisualizer(log_path)
@@ -226,9 +226,9 @@ for runs in range(10):
         running_noise = hp.noise_percent
         postfix = "without curriculum.csv"
 
-    filename = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "results/experiment_kmnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
+    sequence_result = "results/experiment_kmnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):
@@ -342,3 +342,4 @@ for runs in range(10):
              mean_train_accuracy, all_metrics[at_epoch_test]["test_accuracy"], str(at_epoch_test),
              mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"], metrics["validation_accuracy"],
              metrics["validation_f1score"]])
+

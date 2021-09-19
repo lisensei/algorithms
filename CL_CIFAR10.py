@@ -32,7 +32,7 @@ parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=1/60)
+parser.add_argument("-samples", default=1/50)
 hp = parser.parse_args()
 
 '''This class is used to send data to tensorboard'''
@@ -74,65 +74,66 @@ class DataVisualizer:
 class DataProcessor:
     def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
 
-        self.data_train = torchvision.datasets.MNIST(root='./data', train=True, transform=transform.Compose(
+        self.data_train = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
             ]
-        ), download=True)
-        self.data_test = torchvision.datasets.MNIST(root='./data', train=False, transform=transform.Compose(
+        ), download=False)
+        self.data_test = torchvision.datasets.CIFAR10(root='./data', train=False, transform=transform.Compose(
             [
                 transform.ToTensor(),
             ]
-        ), download=True)
+        ), download=False)
+        self.data_test.data=torch.tensor(self.data_test.data).permute((0,3,1,2))
         max_samples = len(self.data_train.data)
         self.train_samples = int(max_samples * trainset_size)
         self.val_samples = int(max_samples * valset_size)
         start_index = max_samples - self.val_samples
-        self.train_data = torch.clone(self.data_train.data[0:self.train_samples])
-        self.train_target = torch.clone(self.data_train.targets[0:self.train_samples])
-        self.validation_data = torch.clone(self.data_train.data[start_index:])
-        self.validation_target = torch.clone(self.data_train.targets[start_index:])
+        self.train_data = torch.clone(torch.tensor(self.data_train.data[0:self.train_samples])).permute((0,3,1,2))
+        self.train_target = torch.clone(torch.tensor(self.data_train.targets[0:self.train_samples]))
+        self.validation_data = torch.clone(torch.tensor(self.data_train.data[start_index:])).permute((0,3,1,2))
+        self.validation_target = torch.clone(torch.tensor(self.data_train.targets[start_index:]))
         self.train_set = Data.DataLoader(
-            dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
+            dataset=Data.TensorDataset(self.train_data.to(torch.float32),
                                        self.train_target), batch_size=hp.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
-            dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+            dataset=Data.TensorDataset(torch.tensor(self.data_test.data).to(torch.float32),
+                                       torch.tensor(self.data_test.targets)), batch_size=hp.batch_size, shuffle=False)
         self.validation_set = Data.DataLoader(
-            dataset=Data.TensorDataset(self.validation_data.to(torch.float32).unsqueeze(dim=1),
+            dataset=Data.TensorDataset(self.validation_data.to(torch.float32),
                                        self.validation_target), batch_size=hp.batch_size, shuffle=True)
 
     def repack(self):
         self.train_set = Data.DataLoader(
-            dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
+            dataset=Data.TensorDataset(self.train_data.to(torch.float32),
                                        self.train_target), batch_size=hp.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
-            dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+            dataset=Data.TensorDataset(torch.tensor(self.data_test.data).to(torch.float32),
+                                       torch.tensor(self.data_test.targets)), batch_size=hp.batch_size, shuffle=False)
 
     def getDataset(self, ):
         return self.train_set, self.test_set
 
     def addPepperNoise(self, percent):
         self.resetDataset()
-        self.train_data.squeeze(dim=1)
         if percent >= 100:
             percent = 100
 
         for i, image in enumerate(self.train_data):
-            polluted_pixels = random.sample(range(0, 28 * 28), int(percent / 100 * 28 * 28))
-            for i in range(len(polluted_pixels)):
-                row = int(polluted_pixels[i] / 28)
-                col = polluted_pixels[i] % 28
-                if (row + col) % 2 == 0:
-                    image[row][col] = 0
-                else:
-                    image[row][col] = 255.0
+            polluted_pixels = random.sample(range(0, 32 * 32), int(percent / 100 * 32 * 32))
+            for chn in range(3):
+                for i in range(len(polluted_pixels)):
+                    row = int(polluted_pixels[i] / 32)
+                    col = polluted_pixels[i] % 32
+                    if (row + col) % 2 == 0:
+                        image[chn][row][col] = 0
+                    else:
+                        image[chn][row][col] = 255.0
         self.repack()
 
     def resetDataset(self):
-        self.train_data = torch.clone(self.data_train.data[0:self.train_samples])
-        self.train_target = torch.clone(self.data_train.targets[0:self.train_samples])
+        self.train_data = torch.clone(torch.tensor(self.data_train.data[0:self.train_samples])).permute((0,3,1,2))
+        self.train_target = torch.clone(torch.tensor(self.data_train.targets[0:self.train_samples]))
 
 
 '''This class is used to make statistical calculations such as calculate F1 score'''
@@ -184,21 +185,21 @@ class ResNet(nn.Module):
         self.batch_size = hp.batch_size
         super(ResNet, self).__init__()
         self.layers = nn.Sequential(
-            ResBlock(1, 2, 4),
-            ResBlock(4, 4, 4),
+            ResBlock(3, 3, 3),
+            ResBlock(3, 3, 3),
         )
-        self.cov = nn.Conv2d(in_channels=4,
-                             out_channels=8,
+        self.cov = nn.Conv2d(in_channels=3,
+                             out_channels=6,
                              kernel_size=3,
                              padding=1)
         self.relu = nn.ReLU()
-        self.linear_layer = nn.Linear(in_features=28 * 28 * 8, out_features=number_of_class)
+        self.linear_layer = nn.Linear(in_features=32 * 32 * 6, out_features=number_of_class)
 
     def forward(self, x):
         out = self.layers.forward(x)
         out = self.cov(out)
         out = self.relu(out)
-        out = out.reshape(len(out), 28 * 28 * 8)
+        out = out.reshape(len(out), 32 * 32 * 6)
         out = self.linear_layer.forward(out)
         return out
 
@@ -213,7 +214,7 @@ for runs in range(10):
     running_noise = 0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "results/experiment_mnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+    log_path = "results/experiment_cifar10/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
         hp.run_name)
 
     visualizer = DataVisualizer(log_path)
@@ -226,9 +227,9 @@ for runs in range(10):
         running_noise = hp.noise_percent
         postfix = "without curriculum.csv"
 
-    filename = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "results/experiment_cifar10/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
+    sequence_result = "results/experiment_cifar10/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):

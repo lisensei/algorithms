@@ -23,16 +23,16 @@ from torch.utils.tensorboard import SummaryWriter
 
 parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
-parser.add_argument("-sequence_name", default=1)
+parser.add_argument("-sequence_name", default=0)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=1,type=int)
+parser.add_argument("-noise_percent", default=0, type=int)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=1/60)
+parser.add_argument("-samples", default=1)
 hp = parser.parse_args()
 
 '''This class is used to send data to tensorboard'''
@@ -176,6 +176,8 @@ class ResBlock(nn.Module):
     def forward(self, x):
         z = self.upper_layer.forward(x)
         z_out = self.lower_layer.forward(z)
+        if x.shape[1]!=z_out.shape[1]and x.shape[1]!=1:
+            x=torch.cat((x,x),dim=1)
         return z_out + x
 
 
@@ -185,20 +187,31 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.layers = nn.Sequential(
             ResBlock(1, 2, 4),
-            ResBlock(4, 4, 4),
+            ResBlock(4, 4, 8),
         )
-        self.cov = nn.Conv2d(in_channels=4,
-                             out_channels=8,
+        self.cov = nn.Conv2d(in_channels=8,
+                             out_channels=16,
                              kernel_size=3,
                              padding=1)
         self.relu = nn.ReLU()
-        self.linear_layer = nn.Linear(in_features=28 * 28 * 8, out_features=number_of_class)
+        self.mp1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.covf = nn.Conv2d(in_channels=16,
+                              out_channels=24,
+                              kernel_size=3,
+                              padding=1)
+        self.reluf = nn.ReLU()
+        self.mpf = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.linear_layer = nn.Linear(in_features=7 * 7 * 24, out_features=number_of_class)
 
     def forward(self, x):
         out = self.layers.forward(x)
-        out = self.cov(out)
-        out = self.relu(out)
-        out = out.reshape(len(out), 28 * 28 * 8)
+        out = self.cov.forward(out)
+        out = self.relu.forward(out)
+        out = self.mp1.forward(out)
+        out = self.covf.forward(out)
+        out = self.reluf.forward(out)
+        out = self.mpf.forward(out)
+        out = out.reshape(len(out), 7 * 7 * 24)
         out = self.linear_layer.forward(out)
         return out
 
@@ -213,7 +226,8 @@ for runs in range(10):
     running_noise = 0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "results/experiment_kmnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+    log_path = "results/experiment_kmnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(
+        hp.sequence_name) + "_run " + str(
         hp.run_name)
 
     visualizer = DataVisualizer(log_path)
@@ -226,9 +240,11 @@ for runs in range(10):
         running_noise = hp.noise_percent
         postfix = "without curriculum.csv"
 
-    filename = "results/experiment_kmnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "results/experiment_kmnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(
+        hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "results/experiment_kmnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
+    sequence_result = "results/experiment_kmnist/metrics/sequence " + str(
+        hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):
@@ -309,10 +325,10 @@ for runs in range(10):
                 metrics["validation_accuracy"] = train_accuracy.item()
                 metrics["validation_f1score"] = f1score_train.item()
 
-        fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
+        # fig = visualizer.plotMatrix([metrics["train_confusion_matrix"], metrics["test_confusion_matrix"]])
 
-        visualizer.addToTensorboard(fig, epoch)
-        plt.close("all")
+        # visualizer.addToTensorboard(fig, epoch)
+        # plt.close("all")
         all_metrics.append(metrics)
         train_accuracies[epoch] = metrics["train_accuracy"]
         test_accuracies[epoch] = metrics["test_accuracy"]
@@ -342,4 +358,3 @@ for runs in range(10):
              mean_train_accuracy, all_metrics[at_epoch_test]["test_accuracy"], str(at_epoch_test),
              mean_test_accuracy, all_metrics[at_epoch_test]["test_f1score"], metrics["validation_accuracy"],
              metrics["validation_f1score"]])
-

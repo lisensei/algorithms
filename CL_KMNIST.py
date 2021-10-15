@@ -218,7 +218,7 @@ class ResNet(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor(hp.samples)
+processor = DataProcessor()
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):
@@ -267,7 +267,7 @@ for runs in range(10):
     if torch.cuda.is_available():
         net.cuda()
     loss = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=hp.learning_rate)
+    optimizer = torch.optim.SGD(net.parameters(), lr=hp.learning_rate)
 
     ''' metrics array holds metrics of each epoch
         all_metrics holds all metrics from all epochs

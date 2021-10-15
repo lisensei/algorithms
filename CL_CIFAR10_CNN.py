@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description="Hyper parameters")
 parser.add_argument("-run_name", default=0)
 parser.add_argument("-sequence_name", default=0)
 parser.add_argument("-learning_rate", default=75e-4)
-parser.add_argument("-epoches", default=50)
+parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=30)
 parser.add_argument("-noise_percent", default=0, type=int)
 parser.add_argument("-mean", default=0)
@@ -72,7 +72,7 @@ class DataVisualizer:
 
 
 class DataProcessor:
-    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
+    def __init__(self, trainset_size=4 / 5, valset_size=1 / 5):
 
         self.data_train = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transform.Compose(
             [
@@ -89,6 +89,7 @@ class DataProcessor:
         self.train_samples = int(max_samples * trainset_size)
         self.val_samples = int(max_samples * valset_size)
         start_index = max_samples - self.val_samples
+        print(self.train_samples)
         self.train_data = torch.clone(torch.tensor(self.data_train.data[0:self.train_samples])).permute((0, 3, 1, 2))
         self.train_target = torch.clone(torch.tensor(self.data_train.targets[0:self.train_samples]))
         self.validation_data = torch.clone(torch.tensor(self.data_train.data[start_index:])).permute((0, 3, 1, 2))
@@ -185,12 +186,12 @@ class CNN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(in_channels=89, out_channels=144, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(in_channels=144, out_channels=243, kernel_size=3, padding=1),
+            nn.Conv2d(in_channels=144, out_channels=233, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.BatchNorm2d(num_features=243),
+            nn.BatchNorm2d(num_features=233),
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
-        self.fc = nn.Linear(in_features=4 * 4 * 243, out_features=120)
+        self.fc = nn.Linear(in_features=4 * 4 * 233, out_features=120)
         self.rl=nn.ReLU()
         self.fcf = nn.Linear(in_features=120, out_features=self.num_classes)
 
@@ -204,7 +205,7 @@ class CNN(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor(hp.samples)
+processor = DataProcessor()
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):

@@ -32,7 +32,7 @@ parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
 parser.add_argument("-curriculum", default=False)
-parser.add_argument("-samples", default=1/60)
+parser.add_argument("-samples", default=1)
 hp = parser.parse_args()
 
 '''This class is used to send data to tensorboard'''
@@ -205,7 +205,7 @@ class ResNet(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor(hp.samples)
+processor = DataProcessor()
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):

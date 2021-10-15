@@ -72,8 +72,8 @@ class DataVisualizer:
 
 
 class DataProcessor:
-    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
-
+    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6, batch_size=16):
+        self.batch_size = batch_size
         self.data_train = torchvision.datasets.KMNIST(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -94,21 +94,21 @@ class DataProcessor:
         self.validation_target = torch.clone(self.data_train.targets[start_index:])
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+                                       self.data_test.targets), batch_size=self.batch_size, shuffle=False)
         self.validation_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.validation_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.validation_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.validation_target), batch_size=self.batch_size, shuffle=True)
 
     def repack(self):
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+                                       self.data_test.targets), batch_size=self.batch_size, shuffle=False)
 
     def getDataset(self, ):
         return self.train_set, self.test_set
@@ -176,14 +176,14 @@ class ResBlock(nn.Module):
     def forward(self, x):
         z = self.upper_layer.forward(x)
         z_out = self.lower_layer.forward(z)
-        if x.shape[1]!=z_out.shape[1]and x.shape[1]!=1:
-            x=torch.cat((x,x),dim=1)
+        if x.shape[1] != z_out.shape[1] and x.shape[1] != 1:
+            x = torch.cat((x, x), dim=1)
         return z_out + x
 
 
 class ResNet(nn.Module):
-    def __init__(self, number_of_class):
-        self.batch_size = hp.batch_size
+    def __init__(self, number_of_class, batch_size=hp.batch_size):
+        self.batch_size = batch_size
         super(ResNet, self).__init__()
         self.layers = nn.Sequential(
             ResBlock(1, 2, 4),
@@ -218,7 +218,7 @@ class ResNet(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor()
+processor = DataProcessor(trainset_size=5 / 6, valset_size=1 / 6, batch_size=hp.batch_size)
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):

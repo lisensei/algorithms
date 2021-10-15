@@ -72,8 +72,8 @@ class DataVisualizer:
 
 
 class DataProcessor:
-    def __init__(self, trainset_size=4 / 5, valset_size=1 / 5):
-
+    def __init__(self, trainset_size=4 / 5, valset_size=1 / 5, batch_size=hp.batch_size):
+        self.batch_size = batch_size
         self.data_train = torchvision.datasets.CIFAR10(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -96,21 +96,21 @@ class DataProcessor:
         self.validation_target = torch.clone(torch.tensor(self.data_train.targets[start_index:]))
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32),
-                                       torch.tensor(self.data_test.targets)), batch_size=hp.batch_size, shuffle=False)
+                                       torch.tensor(self.data_test.targets)), batch_size=self.batch_size, shuffle=False)
         self.validation_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.validation_data.to(torch.float32),
-                                       self.validation_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.validation_target), batch_size=self.batch_size, shuffle=True)
 
     def repack(self):
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32),
-                                       torch.tensor(self.data_test.targets)), batch_size=hp.batch_size, shuffle=False)
+                                       torch.tensor(self.data_test.targets)), batch_size=self.batch_size, shuffle=False)
 
     def getDataset(self, ):
         return self.train_set, self.test_set
@@ -173,7 +173,7 @@ class CNN(nn.Module):
             nn.Conv2d(in_channels=8, out_channels=13, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(num_features=13),
-            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=13, out_channels=21, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.Conv2d(in_channels=21, out_channels=34, kernel_size=3, padding=1),
@@ -192,7 +192,7 @@ class CNN(nn.Module):
             nn.MaxPool2d(kernel_size=2, stride=2),
         )
         self.fc = nn.Linear(in_features=4 * 4 * 233, out_features=120)
-        self.rl=nn.ReLU()
+        self.rl = nn.ReLU()
         self.fcf = nn.Linear(in_features=120, out_features=self.num_classes)
 
     def forward(self, x):
@@ -205,7 +205,7 @@ class CNN(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor()
+processor = DataProcessor(trainset_size=4 / 5, valset_size=1 / 5, batch_size=hp.batch_size)
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):

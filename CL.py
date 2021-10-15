@@ -27,7 +27,7 @@ parser.add_argument("-sequence_name", default=1)
 parser.add_argument("-learning_rate", default=3e-3)
 parser.add_argument("-epoches", default=20)
 parser.add_argument("-batch_size", default=16)
-parser.add_argument("-noise_percent", default=1,type=int)
+parser.add_argument("-noise_percent", default=1, type=int)
 parser.add_argument("-mean", default=0)
 parser.add_argument("-std", default=1)
 parser.add_argument("-classes", default=10)
@@ -35,7 +35,7 @@ parser.add_argument("-curriculum", default=False)
 parser.add_argument("-samples", default=1)
 hp = parser.parse_args()
 
-'''This class is used to send data to tensorboard'''
+'''This class is used to process dataset,such as adding noise'''
 
 
 class DataVisualizer:
@@ -68,12 +68,9 @@ class DataVisualizer:
         return figure
 
 
-'''This class is used to process dataset,such as adding noise'''
-
-
 class DataProcessor:
-    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6):
-
+    def __init__(self, trainset_size=5 / 6, valset_size=1 / 6, batch_size=16):
+        self.batch_size = batch_size
         self.data_train = torchvision.datasets.MNIST(root='./data', train=True, transform=transform.Compose(
             [
                 transform.ToTensor()
@@ -94,21 +91,21 @@ class DataProcessor:
         self.validation_target = torch.clone(self.data_train.targets[start_index:])
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+                                       self.data_test.targets), batch_size=self.batch_size, shuffle=False)
         self.validation_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.validation_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.validation_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.validation_target), batch_size=self.batch_size, shuffle=True)
 
     def repack(self):
         self.train_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.train_data.to(torch.float32).unsqueeze(dim=1),
-                                       self.train_target), batch_size=hp.batch_size, shuffle=True)
+                                       self.train_target), batch_size=self.batch_size, shuffle=True)
         self.test_set = Data.DataLoader(
             dataset=Data.TensorDataset(self.data_test.data.to(torch.float32).unsqueeze(dim=1),
-                                       self.data_test.targets), batch_size=hp.batch_size, shuffle=False)
+                                       self.data_test.targets), batch_size=self.batch_size, shuffle=False)
 
     def getDataset(self, ):
         return self.train_set, self.test_set
@@ -180,8 +177,8 @@ class ResBlock(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, number_of_class):
-        self.batch_size = hp.batch_size
+    def __init__(self, number_of_class, batch_size=16):
+        self.batch_size = batch_size
         super(ResNet, self).__init__()
         self.layers = nn.Sequential(
             ResBlock(1, 2, 4),
@@ -205,7 +202,8 @@ class ResNet(nn.Module):
 
 torch.manual_seed(hp.run_name)
 random.seed(hp.run_name)
-processor = DataProcessor()
+processor = DataProcessor(trainset_size=5 / 6, valset_size=1 / 6, batch_size=hp.batch_size)
+
 if not hp.curriculum:
     processor.addPepperNoise(hp.noise_percent)
 for runs in range(10):
@@ -213,7 +211,8 @@ for runs in range(10):
     running_noise = 0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    log_path = "results/experiment_mnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_run " + str(
+    log_path = "results/experiment_mnist/runs/sequence " + str(hp.sequence_name) + "/sequence " + str(
+        hp.sequence_name) + "_run " + str(
         hp.run_name)
 
     visualizer = DataVisualizer(log_path)
@@ -226,9 +225,11 @@ for runs in range(10):
         running_noise = hp.noise_percent
         postfix = "without curriculum.csv"
 
-    filename = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(hp.sequence_name) + "_" + "run " + str(
+    filename = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/sequence " + str(
+        hp.sequence_name) + "_" + "run " + str(
         hp.run_name) + "_" + postfix
-    sequence_result = "results/experiment_mnist/metrics/sequence " + str(hp.sequence_name) + "/summary of sequence " + str(
+    sequence_result = "results/experiment_mnist/metrics/sequence " + str(
+        hp.sequence_name) + "/summary of sequence " + str(
         hp.sequence_name) + ".csv"
 
     if not os.path.exists(filename):

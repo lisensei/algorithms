@@ -7,21 +7,21 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import random
 import numpy as np
+import pandas as pd
 
 parser = argparse.ArgumentParser(description="hyper parameters")
-parser.add_argument("-mix_percent", default=1)
+parser.add_argument("-mix_percent", type=int, default=1)
 parser.add_argument("-learning_rate", default=3e-1)
 parser.add_argument("-curriculum", type=int, default=0)
-parser.add_argument("-repeats", type=int, default=10)
+parser.add_argument("-repeats", type=int, default=1)
 parser.add_argument("-epochs", type=int, default=20)
 parser.add_argument("-batch_size", type=int, default=16)
-parser.add_argument("-max_percent", type=float, default=0)
 parser.add_argument("-sequence", type=int, default=1)
 hp = parser.parse_args()
 
 
 class KEMNIST(Dataset):
-    def __init__(self, val_percent=1 / 5, classes=torch.tensor([26, 10])):
+    def __init__(self, classes=torch.tensor([26, 10])):
         super(KEMNIST, self).__init__()
         self.mix_set_total = 110000
         self.classes = classes
@@ -100,8 +100,8 @@ class CNN(nn.Module):
 
 torch.manual_seed(np.e)
 random.seed(np.e)
-ok = random.randint(5, 10000)
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 data = KEMNIST()
 if hp.curriculum:
     data_train = data.mix_dataset(0)
@@ -110,33 +110,61 @@ else:
 
 data_val = DataLoader(data.get_dataset("validation"), shuffle=True, batch_size=hp.batch_size)
 data_test = DataLoader(data.get_dataset("test"), shuffle=True, batch_size=hp.batch_size)
-loss_function = nn.CrossEntropyLoss()
-net = CNN(data.total_classes)
-optimizer = torch.optim.SGD(net.parameters(), lr=1e-2)
 increments = hp.mix_percent / hp.epochs
 
-for re in range(hp.repeats):
-    current_mix_percent = 0
+'''
+Experiment repeats starts, the number of repeats is determined by the hyper parameter hp.repeats
+'''
+header = ["sequence", "repeat id", "batch size", "epoch", "curriculum", "current kmnist percent",
+          "number of correct", "training loss",
+          "training accuracy", "test accuracy", "validation accuracy"]
+
+for repeat in range(hp.repeats):
+    loss_function = nn.CrossEntropyLoss()
+    net = CNN(data.total_classes)
+    net.to(device=device)
+    optimizer = torch.optim.SGD(net.parameters(), lr=1e-2)
+    current_kmnist_percent = 0
     if hp.curriculum:
         data_train = data.mix_dataset(0)
-    datasets = [data_train, data_val, data_test]
+    datasets = [data_train, data_test]
 
-    for dataset in datasets:
-        if dataset == data_train:
-            epoch = hp.epochs
+    '''
+        Epochs starts, number of epochs for the three datasets are different.
+        The number of epochs for the training set is given by the hyper parameter hp.epochs.
+        The number of epochs for the validation set and test set are on.
+        '''
+    epoch_df = pd.DataFrame(columns=header)
+    for epoch in range(hp.epochs):
+        metrics = dict()
+        metrics["sequence"] = hp.sequence
+        metrics["batch size"] = hp.batch_size
+        metrics["training accuracy"] = 0
+        metrics["test accuracy"] = 0
+        metrics["validation accuracy"] = 0
+        metrics["current kmnist percent"] = 0
+        metrics["repeat id"] = repeat
+        metrics["number of correct"] = 0
+        metrics["epoch"] = epoch
+        if hp.curriculum:
+            metrics["curriculum"] = "true"
         else:
-            epoch = 1
-        for e in range(epoch):
+            metrics["curriculum"] = "false"
+        for dataset in datasets:
+            if epoch == hp.epochs - 1:
+                datasets.append(data_val)
             epoch_correct = 0
             epoch_loss = 0
             accuracy = 0
             if hp.curriculum and dataset == data_train:
-                dataset = data.mix_dataset(current_mix_percent)
-                current_mix_percent += increments
+                dataset = data.mix_dataset(current_kmnist_percent)
+                current_kmnist_percent += increments
             for i, (x, y) in enumerate(dataset):
+                x = x.to(device)
+                y = y.to(device)
                 y_pred = net(x.float())
                 indices = torch.argmax(y_pred, dim=1).reshape(-1)
-                num_correct = torch.sum(torch.tensor([1 if x else 0 for x in indices == y]))
+                num_correct = torch.sum(torch.tensor([1 if x else 0 for x in indices == y])).to(device)
                 epoch_correct += num_correct
                 loss = loss_function(y_pred, y.reshape(-1))
                 epoch_loss += loss
@@ -144,12 +172,29 @@ for re in range(hp.repeats):
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
+            metrics["number of correct"] = epoch_correct.item()
+            metrics["current kmnist percent"] = current_kmnist_percent
+            metrics["epoch"] = epoch
+            metrics["training loss"] = epoch_loss.item()
             if dataset == data_train:
                 accuracy = epoch_correct / data.mix_set_total
-                print(f"epoch:{e},train loss:{epoch_loss},training accuracy:{accuracy}")
-            elif dataset == data_val:
-                accuracy = epoch_correct / data.validation_size
-                print(f"epoch:{e},validation loss:{epoch_loss},validation accuracy:{accuracy}")
-            else:
+                metrics["training accuracy"] = accuracy.item()
+                print(f"epoch:{epoch},train loss:{epoch_loss},training accuracy:{accuracy}")
+            elif dataset == data_test:
                 accuracy = epoch_correct / data.test_size
-                print(f"epoch:{e},test loss:{epoch_loss},test accuracy:{accuracy}")
+                metrics["test accuracy"] = accuracy.item()
+                print(f"epoch:{epoch},test loss:{epoch_loss},test accuracy:{accuracy}")
+            else:
+                accuracy = epoch_correct / data.validation_size
+                metrics["validation accuracy"] = accuracy.item()
+                print(f"epoch:{epoch},test loss:{epoch_loss},test accuracy:{accuracy}")
+            epoch_df = epoch_df.append(metrics, ignore_index=True)
+        if hp.curriculum:
+            ending = "_with curriculum"
+        else:
+            ending = "_without curriculum"
+        filename = "results/experiment_kemnist/metrics/sequence " + str(hp.sequence) + "/sequence " + str(
+            hp.sequence) + "_repeat " + str(
+            repeat) + "_mix percent " + str(
+            hp.mix_percent) + ending + ".csv"
+        epoch_df.to_csv(filename, index=False)

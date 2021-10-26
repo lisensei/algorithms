@@ -1,11 +1,9 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+np.set_printoptions(precision=6)
 import os
-
-experiment = "kmnist"
-
-filepath = "results/experiment_" + experiment + "/metrics/"
 
 
 class summarizer():
@@ -170,43 +168,63 @@ class summarizer():
         df_cl = pd.DataFrame(cl_table, columns=["Noise Percent", "Mean Training Loss", "Best Test Accuracy",
                                                 "Mean Training Accuracy", "Mean Test Accuracy",
                                                 "Mean Validation Accuracy"])
-        tablename_nc = self.experiment + "_summary_nc.csv"
-        tablename_cl = self.experiment + "_summary_cl.csv"
+        tablename_nc = "./tables/" + self.experiment + "_summary_nc.csv"
+        tablename_cl = "./tables/" + self.experiment + "_summary_cl.csv"
         df_nc.to_csv(tablename_nc, index=False)
         df_cl.to_csv(tablename_cl, index=False)
 
     def get_confidence_interval(self, noise_level):
-        val_acc_nc=np.zeros((1,self.repeats))
-        val_acc_cl=np.zeros((1,self.repeats))
-        for i in range(10):
+        metrics = dict()
+        val_acc_nc = np.zeros((1, self.repeats))
+        val_acc_cl = np.zeros((1, self.repeats))
+        for i in range(self.repeats):
             filename_nc = filepath + "sequence " + str(noise_level) + "/sequence " + str(noise_level) + "_run " + str(
                 i) + "_without curriculum.csv"
-            val_acc_nc[0,i]= pd.read_csv(filename_nc, usecols=[13]).to_numpy().reshape(-1)[-1]
+            val_acc_nc[0, i] = pd.read_csv(filename_nc, usecols=[13]).to_numpy().reshape(-1)[-1]
             filename_cl = filepath + "sequence " + str(noise_level) + "/sequence " + str(noise_level) + "_run " + str(
                 i) + "_with curriculum.csv"
-            val_acc_cl[0,i] = pd.read_csv(filename_cl, usecols=[13]).to_numpy()[-1]
-        difference_table = pd.DataFrame(np.round(np.concatenate((val_acc_cl, val_acc_nc), axis=0),decimals=6),
-                                        columns=["run 0","run 1","run 2","run 3","run 4",
-                                                 "run 5","run 6","run 7","run 8","run 9",])
-        difference_table.index=["curriculum", "non-curriculum"]
-        difference_table.to_csv(self.experiment+"_group_differences.csv")
-        diffrence=(val_acc_cl-val_acc_nc).reshape(-1)
-        diffrence_mean=np.sum(diffrence)/10
-        diffrence_variance=np.sum((diffrence-diffrence_mean)**2/(self.repeats-1))
-        std=np.sqrt(diffrence_variance)
-        half_width=2.262*std/(self.repeats)
-        lower=diffrence_mean-half_width
-        upper=diffrence_mean+half_width
-        print("mean",diffrence_mean)
-        print("std",std)
-        print("[",lower,",",upper,"]")
-        return (lower,upper)
-processor = summarizer(filepath, experiment)
-'''
-processor.get_loss()
-processor.get_mean_train_accuracy()
-processor.get_validation()
-processor.get_mean_test()
-processor.get_best_test()
-'''
-processor.get_confidence_interval(20)
+            val_acc_cl[0, i] = pd.read_csv(filename_cl, usecols=[13]).to_numpy()[-1]
+        difference_table = pd.DataFrame(np.round(np.concatenate((val_acc_cl, val_acc_nc), axis=0), decimals=6),
+                                        columns=["run 0", "run 1", "run 2", "run 3", "run 4",
+                                                 "run 5", "run 6", "run 7", "run 8", "run 9", ])
+        difference_table.index = ["curriculum", "non-curriculum"]
+        # difference_table.to_csv(self.experiment + "_group_differences.csv")
+        diffrence = (val_acc_cl - val_acc_nc).reshape(-1)
+        diffrence_mean = np.sum(diffrence) / self.repeats
+        diffrence_variance = np.sum((diffrence - diffrence_mean) ** 2 / (self.repeats - 1))
+        std = np.sqrt(diffrence_variance)
+        half_width = 2.262 * std / (self.repeats)
+        lower = diffrence_mean - half_width
+        upper = diffrence_mean + half_width
+        metrics["Mean"] = np.round(diffrence_mean, decimals=4)
+        metrics["Std"] = np.round(std, decimals=4)
+        metrics["C.I."] = "[" + str(np.round(lower, decimals=4)) + "," + str(
+            np.round(upper, decimals=4)) + "]"
+        return metrics
+
+
+def process():
+    processor = summarizer(filepath, experiment)
+    processor.get_loss()
+    processor.get_mean_train_accuracy()
+    processor.get_validation()
+    processor.get_mean_test()
+    processor.get_best_test()
+
+
+experiments = ["mnist", "kmnist", "cifar10"]
+df_final = pd.DataFrame()
+for experiment in experiments:
+    filepath = "results/experiment_" + experiment + "/metrics/"
+    processor = summarizer(filepath, experiment)
+    df = pd.DataFrame()
+    for i in range(1, 41):
+        df = df.append(processor.get_confidence_interval(i), ignore_index=True)
+    df_final = pd.concat([df_final, df], axis=1)
+
+fname = "improvement_statistics.csv"
+df=pd.DataFrame(np.arange(1,41),columns=["Noise"])
+df_final=pd.concat([df,df_final],axis=1)
+path = "C:/Users/sherlock/Desktop"
+os.chdir(path)
+df_final.to_csv(fname, sep=";", index=False)

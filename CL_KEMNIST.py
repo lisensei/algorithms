@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 import argparse
 import torchvision.datasets as datarepo
-from torchvision.transforms import ToTensor
+import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+import torch.utils.data as datautils
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 import random
 import numpy as np
@@ -19,30 +20,54 @@ parser.add_argument("-batch_size", type=int, default=16)
 parser.add_argument("-sequence", type=int, default=1)
 hp = parser.parse_args()
 
+'''
+Custom transform to adjust the numbering of classes in the mixed datasets. 
+'''
+
+
+class AddToLabel:
+    def __init__(self, additor):
+        self.addditor = additor
+
+    def __call__(self, label):
+        label = label + self.addditor
+        return label
+
 
 class KEMNIST(Dataset):
-    def __init__(self, classes=torch.tensor([26, 10])):
+    def __init__(self, classes=[26, 10], batch_size=16, half_valsize=10000, mix_set_total=110000, kmnist_len=50000):
         super(KEMNIST, self).__init__()
-        self.mix_set_total = 110000
+        self.batch_size = batch_size
+        self.half_size = half_valsize
+        self.mix_set_total = mix_set_total
         self.classes = classes
-        self.total_classes = torch.sum(self.classes)
-        self.emnist_train = datarepo.EMNIST(root="./data", split="letters", train=True, download=True,
-                                            transform=ToTensor())
-        self.kmnist_train = datarepo.KMNIST(root="./data", train=True, download=True)
+        self.total_classes = sum(classes)
+        self.kmnist_len = kmnist_len
         self.emnist_test = datarepo.EMNIST(root="./data", split="letters", train=False, download=True,
-                                           transform=ToTensor())
-        self.kmnist_test = datarepo.KMNIST(root="./data", train=False, download=True, transform=ToTensor())
-        self.emnist_len = len(self.emnist_train)
-        self.kmnist_len = len(self.kmnist_train)
-        self.mixed_train = self.mix_dataset(0)
-        self.mixed_test = TensorDataset(torch.cat((self.emnist_test.data, self.kmnist_test.data)),
-                                        torch.cat(
-                                            (self.emnist_test.targets, self.kmnist_test.targets + self.classes[0])))
-        self.mixed_validation = TensorDataset(
-            torch.cat((self.emnist_train.data[114800:], self.kmnist_train.data[50000:])),
-            torch.cat((self.emnist_train.targets[114800:], self.kmnist_train.targets[50000:] + self.classes[0])))
-        self.test_size = len(self.mixed_test)
-        self.validation_size = len(self.mixed_validation)
+                                           transform=transforms.ToTensor())
+        self.kmnist_test = datarepo.KMNIST(root="./data", train=False, download=True, transform=transforms.ToTensor(),
+                                           target_transform=AddToLabel(self.classes[0]))
+        self.mix_test_data = datautils.ConcatDataset([self.emnist_test, self.kmnist_test])
+        self.mixed_test = DataLoader(dataset=self.mix_test_data,
+                                     shuffle=True, batch_size=self.batch_size)
+        self.emnist_validation_indices = torch.arange(self.mix_set_total, self.mix_set_total + self.half_size,
+                                                      dtype=torch.int32)
+        self.kmnist_validation_indices = torch.arange(self.kmnist_len, self.kmnist_len + self.half_size,
+                                                      dtype=torch.int32)
+        self.validation_emnist = datautils.Subset(
+            datarepo.EMNIST(root="./data", split="letters", train=True, download=True,
+                            transform=transforms.ToTensor()),
+            indices=self.emnist_validation_indices)
+        self.validation_kmnist = datautils.Subset(
+            datarepo.KMNIST(root="./data", train=True, download=True,
+                            transform=transforms.ToTensor(), target_transform=AddToLabel(self.classes[0])),
+            indices=self.kmnist_validation_indices)
+        self.mixed_validation_data = datautils.ConcatDataset([self.validation_emnist, self.validation_kmnist])
+        self.mixed_validation = DataLoader(
+            dataset=self.mixed_validation_data, shuffle=True,
+            batch_size=self.batch_size)
+        self.test_size = len(self.mix_test_data)
+        self.validation_size = len(self.mixed_validation_data)
 
     def get_dataset(self, dataset_type):
         if dataset_type not in ["train", "validation", "test"]:
@@ -56,13 +81,18 @@ class KEMNIST(Dataset):
             return self.mixed_test
 
     def mix_dataset(self, kmnist_percent):
-        num_kmnist_samples = self.kmnist_len * kmnist_percent
+        num_kmnist_samples = self.kmnist_len * kmnist_percent / 100
         num_emnist_samples = self.mix_set_total - num_kmnist_samples
-        mixed_dataset_train = TensorDataset(torch.cat((self.emnist_train.data[:num_emnist_samples],
-                                                       self.kmnist_train.data[:num_kmnist_samples])),
-                                            torch.cat((self.emnist_train.targets[:num_emnist_samples],
-                                                       self.kmnist_train.targets[:num_kmnist_samples])))
-        mixed_dataset_train = DataLoader(mixed_dataset_train, shuffle=True, batch_size=hp.batch_size)
+        emnist_indices = torch.arange(0, num_emnist_samples, dtype=torch.int32)
+        kmnist_indices = torch.arange(0, num_kmnist_samples, dtype=torch.int32)
+        emnist_samples = datautils.Subset(
+            dataset=datarepo.EMNIST(root="./data", split="letters", train=True, download=True,
+                                    transform=transforms.ToTensor()), indices=emnist_indices)
+        kmnist_samples = datautils.Subset(
+            dataset=datarepo.KMNIST(root="./data", train=True, transform=transforms.ToTensor(),
+                                    target_transform=AddToLabel(self.classes[0])), indices=kmnist_indices)
+        mixed_dataset_train = DataLoader(dataset=datautils.ConcatDataset([emnist_samples, kmnist_samples]),
+                                         shuffle=True, batch_size=self.batch_size)
         return mixed_dataset_train
 
 
@@ -90,7 +120,6 @@ class CNN(nn.Module):
         self.fc = nn.Linear(in_features=134, out_features=num_classes)
 
     def forward(self, x):
-        x = x.unsqueeze(dim=1)
         output = self.covs.forward(x)
         output = output.reshape(len(x), -1)
         output = self.first_liner_layer(output)
@@ -108,8 +137,8 @@ if hp.curriculum:
 else:
     data_train = data.mix_dataset(hp.mix_percent)
 
-data_val = DataLoader(data.get_dataset("validation"), shuffle=True, batch_size=hp.batch_size)
-data_test = DataLoader(data.get_dataset("test"), shuffle=True, batch_size=hp.batch_size)
+data_val = data.get_dataset("validation")
+data_test = data.get_dataset("test")
 increments = hp.mix_percent / hp.epochs
 
 '''
@@ -150,6 +179,10 @@ for repeat in range(hp.repeats):
             metrics["curriculum"] = "true"
         else:
             metrics["curriculum"] = "false"
+
+        '''
+        Iterates overall three datasets.
+        '''
         for dataset in datasets:
             if epoch == hp.epochs - 1:
                 datasets.append(data_val)
@@ -160,18 +193,18 @@ for repeat in range(hp.repeats):
                 dataset = data.mix_dataset(current_kmnist_percent)
                 current_kmnist_percent += increments
             for i, (x, y) in enumerate(dataset):
-                x = x.to(device)
-                y = y.to(device)
+                x = x.to(device).detach()
+                y = y.to(device).detach()
                 y_pred = net(x.float())
-                indices = torch.argmax(y_pred, dim=1).reshape(-1)
-                num_correct = torch.sum(torch.tensor([1 if x else 0 for x in indices == y])).to(device)
-                epoch_correct += num_correct
                 loss = loss_function(y_pred, y.reshape(-1))
                 epoch_loss += loss
                 if dataset == data_train:
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
+                indices = torch.argmax(y_pred, dim=1).reshape(-1)
+                num_correct = torch.sum(torch.tensor([1 if x else 0 for x in indices == y])).to(device)
+                epoch_correct += num_correct
             metrics["number of correct"] = epoch_correct.item()
             metrics["current kmnist percent"] = current_kmnist_percent
             metrics["epoch"] = epoch

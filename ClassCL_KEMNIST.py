@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description="hyper parameters")
 parser.add_argument("-km_classes", type=int, default=10)
 parser.add_argument("-learning_rate", default=1e-2)
 parser.add_argument("-curriculum", type=int, default=0)
-parser.add_argument("-repeats", type=int, default=1)
+parser.add_argument("-repeats", type=int, default=10)
 parser.add_argument("-epochs", type=int, default=20)
 parser.add_argument("-batch_size", type=int, default=16)
 parser.add_argument("-sequence", type=int, default=1)
@@ -69,59 +69,67 @@ class KEMNIST(Dataset):
                                              transform=AddToLabel(self.classes[0]))
         kmnist_valdata = kmnist_valsamples.data[self.kmnist_len:]
         kmnist_vallabel = kmnist_valsamples.targets[self.kmnist_len:]
-        kmvalset = [(x, y) for x, y in zip(kmnist_valdata, kmnist_vallabel)]
-        kmvalset.sort(key=lambda x: x[1])
-        kmval_datalist = []
-        kmval_labellist = []
+        kmnist_validation_set = [(x, y) for x, y in zip(kmnist_valdata, kmnist_vallabel)]
+        kmnist_validation_set.sort(key=lambda x: x[1])
+        kmnist_validation_datalist = []
+        kmnist_validation_labellist = []
         for i in range(len(kmnist_valdata)):
-            kmval_datalist.append(kmvalset[i][0].unsqueeze(dim=0))
-            kmval_labellist.append(kmvalset[i][1])
-        cls = list(torch.tensor(kmval_labellist).tolist())
-        val_offset = torch.tensor([cls.count(i) for i in set(cls)]).cumsum(dim=0).tolist()
+            kmnist_validation_datalist.append(kmnist_validation_set[i][0].unsqueeze(dim=0))
+            kmnist_validation_labellist.append(kmnist_validation_set[i][1])
+
+        '''
+        Count the samples of different classes, get corresponding offset and generate final validation set
+        '''
+        validation_classes = list(torch.tensor(kmnist_validation_labellist).tolist())
+        val_offset = torch.tensor([validation_classes.count(i) for i in set(validation_classes)]).cumsum(dim=0).tolist()
         val_offset.insert(0, 0)
-        '''[1009, 981, 1028, 966, 1018, 1009, 1034, 1013, 974, 968]
-'''
-        kmval_data = []
-        kmval_label = []
+
+        kmnist_validation_data = []
+        kmnist_validation_label = []
         for j in range(kmnist_classes):
             for k in range(samples_per_class):
-                kmval_data.append(kmval_datalist[val_offset[j] + k])
-                kmval_label.append(kmval_labellist[val_offset[j] + k])
+                kmnist_validation_data.append(kmnist_validation_datalist[val_offset[j] + k])
+                kmnist_validation_label.append(kmnist_validation_labellist[val_offset[j] + k])
 
-        kmval_data = torch.cat(kmval_data).unsqueeze(dim=1)
-        kmval_label = torch.tensor(kmval_label) + self.classes[0]
-        kmvalset = datautils.TensorDataset(kmval_data, kmval_label)
+        kmnist_validation_data = torch.cat(kmnist_validation_data).unsqueeze(dim=1)
+        kmnist_validation_label = torch.tensor(kmnist_validation_label) + self.classes[0]
+        kmnist_validation_set = datautils.TensorDataset(kmnist_validation_data, kmnist_validation_label)
 
         '''mixed test set'''
         kmnist_testdata = kmnist_testsamples.data
         kmnist_testlabel = kmnist_testsamples.targets
-        kmtestset = [(x, y) for x, y in zip(kmnist_testdata, kmnist_testlabel)]
-        kmtestset.sort(key=lambda x: x[1])
-        kmtest_datalist = []
-        kmtest_labellist = []
+        kmnist_test_set = [(x, y) for x, y in zip(kmnist_testdata, kmnist_testlabel)]
+        kmnist_test_set.sort(key=lambda x: x[1])
+        kmnist_test_datalist = []
+        kmnist_test_labellist = []
         for i in range(len(kmnist_testdata)):
-            kmtest_datalist.append(kmtestset[i][0].unsqueeze(dim=0))
-            kmtest_labellist.append(kmtestset[i][1])
-        cls = list(torch.tensor(kmtest_labellist).tolist())
-        test_offset = torch.tensor([cls.count(i) for i in set(cls)]).cumsum(dim=0).tolist()
+            kmnist_test_datalist.append(kmnist_test_set[i][0].unsqueeze(dim=0))
+            kmnist_test_labellist.append(kmnist_test_set[i][1])
+
+        '''
+        Count the samples of different classes, get corresponding offset and generate final test set
+        '''
+        test_classes = list(torch.tensor(kmnist_test_labellist).tolist())
+        test_offset = torch.tensor([test_classes.count(i) for i in set(test_classes)]).cumsum(dim=0).tolist()
         test_offset.insert(0, 0)
-        '''[1009, 981, 1028, 966, 1018, 1009, 1034, 1013, 974, 968]
-'''
-        kmtest_data = []
-        kmtest_label = []
+
+        kmnist_test_data = []
+        kmnist_test_label = []
         for j in range(kmnist_classes):
             for k in range(samples_per_class):
-                kmtest_data.append(kmtest_datalist[test_offset[j] + k])
-                kmtest_label.append(kmtest_labellist[test_offset[j] + k])
+                kmnist_test_data.append(kmnist_test_datalist[test_offset[j] + k])
+                kmnist_test_label.append(kmnist_test_labellist[test_offset[j] + k])
 
-        kmtest_data = torch.cat(kmtest_data).unsqueeze(dim=1)
-        kmtest_label = torch.tensor(kmtest_label) + self.classes[0]
-        kmtestset = datautils.TensorDataset(kmtest_data, kmtest_label)
-        mixed_valset = DataLoader(dataset=datautils.ConcatDataset([emnist_valsamples, kmvalset]), shuffle=True,
-                                  batch_size=self.batch_size)
-        mixed_testset = DataLoader(dataset=datautils.ConcatDataset([emnist_testsamples, kmtestset]), shuffle=True,
-                                   batch_size=self.batch_size)
-        return mixed_valset, mixed_testset
+        kmnist_test_data = torch.cat(kmnist_test_data).unsqueeze(dim=1)
+        kmnist_test_label = torch.tensor(kmnist_test_label) + self.classes[0]
+        kmnist_test_set = datautils.TensorDataset(kmnist_test_data, kmnist_test_label)
+        mixed_validation_set = DataLoader(dataset=datautils.ConcatDataset([emnist_valsamples, kmnist_validation_set]),
+                                          shuffle=True,
+                                          batch_size=self.batch_size)
+        mixed_test_set = DataLoader(dataset=datautils.ConcatDataset([emnist_testsamples, kmnist_test_set]),
+                                    shuffle=True,
+                                    batch_size=self.batch_size)
+        return mixed_validation_set, mixed_test_set
 
     def mix_dataset(self, kmclasses):
         num_kmnist_samples = int(self.kmnist_len * kmclasses / 10)

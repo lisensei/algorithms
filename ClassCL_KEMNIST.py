@@ -16,10 +16,11 @@ parser.add_argument("-km_classes", type=int, default=10)
 parser.add_argument("-learning_rate", default=1e-2)
 parser.add_argument("-curriculum", type=int, default=0)
 parser.add_argument("-repeats", type=int, default=10)
-parser.add_argument("-epochs", type=int, default=20)
+parser.add_argument("-epochs", type=int, default=100)
 parser.add_argument("-batch_size", type=int, default=16)
-parser.add_argument("-sequence", type=int, default=1)
+parser.add_argument("-sequence", type=int, default=10)
 parser.add_argument("-samples_per_class", type=int, default=500)
+parser.add_argument("-step_size", type=int, default=10)
 hp = parser.parse_args([])
 
 '''
@@ -201,14 +202,15 @@ else:
     data_train = data.mix_dataset(hp.km_classes)
 
 data_val, data_test = data.val_test(hp.km_classes)
-step_size = hp.km_classes / hp.epochs
+step_size = hp.step_size
 
 '''
 Experiment repeats starts, the number of repeats is determined by the hyper parameter hp.repeats
 '''
 header = ["sequence", "repeat id", "batch size", "epoch", "curriculum", "current kmnist classes",
           "number of train correct", "training loss",
-          "training accuracy", "number of test correct", "test accuracy", "validation accuracy"]
+          "used training samples", "training accuracy", "used test samples", "number of test correct", "test accuracy",
+          "used validation samples", "validation accuracy"]
 
 for repeat in range(hp.repeats):
     loss_function = nn.CrossEntropyLoss()
@@ -218,6 +220,8 @@ for repeat in range(hp.repeats):
     current_kmnist_classes = 0
     if hp.curriculum:
         data_train = data.mix_dataset(0)
+    else:
+        current_kmnist_classes = hp.km_classes
     datasets = [data_train, data_test]
 
     '''
@@ -239,6 +243,9 @@ for repeat in range(hp.repeats):
         metrics["number of train correct"] = 0
         metrics["number of test correct"] = 0
         metrics["epoch"] = epoch
+        metrics["used training samples"] = 0
+        metrics["used validation samples"] = 0
+        metrics["used test samples"] = 0
         if hp.curriculum:
             metrics["curriculum"] = "true"
         else:
@@ -257,8 +264,7 @@ for repeat in range(hp.repeats):
             if hp.curriculum and i == 0 and epoch != 0 and epoch % step_size == 0:
                 dataset = data.mix_dataset(current_kmnist_classes)
                 current_kmnist_classes += 1
-            if not hp.curriculum:
-                current_kmnist_classes = hp.km_classes
+
             for j, (x, y) in enumerate(dataset):
                 x = x.to(device)
                 y = y.to(device)
@@ -280,24 +286,27 @@ for repeat in range(hp.repeats):
                 metrics["number of train correct"] = epoch_correct.item()
                 metrics["training accuracy"] = accuracy.item()
                 metrics["training loss"] = epoch_loss.item()
+                metrics["used training samples"] = samples
             elif i == 1:
                 accuracy = epoch_correct / samples
                 metrics["number of test correct"] = epoch_correct.item()
                 metrics["test accuracy"] = accuracy.item()
+                metrics["used test samples"] = samples
             else:
                 accuracy = epoch_correct / samples
                 metrics["validation accuracy"] = accuracy.item()
+                metrics["used validation samples"] = samples
         epoch_df = epoch_df.append(metrics, ignore_index=True)
         print(
             f'repeat:{repeat},epoch:{epoch},current kmnist classes:{metrics["current kmnist classes"]},train loss:{metrics["training loss"]},'
             f'training accuracy:{metrics["training accuracy"]},'
             f'test accuracy:{metrics["test accuracy"]},'
-            f'validation accuracy:{metrics["validation accuracy"]}')
+            f'validation accuracy:{metrics["validation accuracy"]},out features:{net.fc.out_features}')
         if hp.curriculum:
             ending = "_with curriculum"
         else:
             ending = "_without curriculum"
-        filedir = filename = "results/experiment_kemnist/metrics/sequence " + str(hp.sequence)
+        filedir = filename = "results/experiment_class_kemnist/metrics/sequence " + str(hp.sequence)
         if not os.path.exists(filedir):
             os.makedirs(filedir)
         filename = filedir + "/sequence " + str(

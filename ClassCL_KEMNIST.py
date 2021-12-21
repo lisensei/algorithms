@@ -14,15 +14,14 @@ import os
 parser = argparse.ArgumentParser(description="hyper parameters")
 parser.add_argument("-km_classes", type=int, default=10)
 parser.add_argument("-learning_rate", default=1e-2)
-parser.add_argument("-curriculum", type=int, default=0)
+parser.add_argument("-curriculum", type=int, default=1)
 parser.add_argument("-repeats", type=int, default=10)
 parser.add_argument("-epochs", type=int, default=100)
 parser.add_argument("-batch_size", type=int, default=16)
 parser.add_argument("-sequence", type=int, default=10)
 parser.add_argument("-samples_per_class", type=int, default=500)
 parser.add_argument("-step_size", type=int, default=10)
-hp = parser.parse_args([])
-
+hp = parser.parse_args()
 '''
 Custom transform to adjust the numbering of classes in the mixed datasets. 
 '''
@@ -197,7 +196,7 @@ random.seed(np.e)
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 data = KEMNIST()
 if hp.curriculum:
-    data_train = data.mix_dataset(0)
+    data_train = data.mix_dataset(1)
 else:
     data_train = data.mix_dataset(hp.km_classes)
 
@@ -217,9 +216,9 @@ for repeat in range(hp.repeats):
     net = CNN(data.total_classes)
     net.to(device=device)
     optimizer = torch.optim.SGD(net.parameters(), lr=hp.learning_rate)
-    current_kmnist_classes = 0
+    current_kmnist_classes = 1
     if hp.curriculum:
-        data_train = data.mix_dataset(0)
+        data_train = data.mix_dataset(1)
     else:
         current_kmnist_classes = hp.km_classes
     datasets = [data_train, data_test]
@@ -263,7 +262,8 @@ for repeat in range(hp.repeats):
             accuracy = 0
             if hp.curriculum and i == 0 and epoch != 0 and epoch % step_size == 0:
                 dataset = data.mix_dataset(current_kmnist_classes)
-                current_kmnist_classes += 1
+                if current_kmnist_classes < hp.km_classes:
+                    current_kmnist_classes += 1
 
             for j, (x, y) in enumerate(dataset):
                 x = x.to(device)
@@ -298,7 +298,7 @@ for repeat in range(hp.repeats):
                 metrics["used validation samples"] = samples
         epoch_df = epoch_df.append(metrics, ignore_index=True)
         print(
-            f'repeat:{repeat},epoch:{epoch},current kmnist classes:{metrics["current kmnist classes"]},train loss:{metrics["training loss"]},'
+            f'curriculum enabled:{hp.curriculum},repeat:{repeat},epoch:{epoch},current kmnist classes:{metrics["current kmnist classes"]},train loss:{metrics["training loss"]},'
             f'training accuracy:{metrics["training accuracy"]},'
             f'test accuracy:{metrics["test accuracy"]},'
             f'validation accuracy:{metrics["validation accuracy"]},out features:{net.fc.out_features}')

@@ -36,12 +36,12 @@ class summarizer():
         xs = np.linspace(1, 40, 40)
         plt.plot(xs, mean_trainloss_nc)
         plt.plot(xs, mean_trainloss_cl)
-        plt.title("mean of training loss of " + self.experiment + " experiment")
+        plt.title("mean training loss of " + self.experiment + " experiment")
         plt.xlabel("percent of pepper noise")
-        plt.ylabel("Training loss")
+        plt.ylabel("mean training loss")
         plt.legend(["without curriculum", "with curriculum"])
         fname = "figures/experiment_" + self.experiment + "/" + self.experiment + "_mean_training_loss.png"
-        plt.savefig(fname)
+        plt.savefig(fname.lower())
         plt.clf()
         return (mean_trainloss_nc, mean_trainloss_cl)
 
@@ -55,12 +55,12 @@ class summarizer():
         xs = np.linspace(1, self.sequences, self.sequences)
         plt.plot(xs, valtable_nc)
         plt.plot(xs, valtable_cl)
-        plt.title("mean of validation accuracy of " + self.experiment + " experiment")
+        plt.title("mean validation accuracy of " + self.experiment + " experiment")
         plt.xlabel("percent of pepper noise")
-        plt.ylabel("validation accuracy")
+        plt.ylabel("mean validation accuracy")
         plt.legend(["without curriculum", "with curriculum"])
         fname = "figures/experiment_" + self.experiment + "/" + self.experiment + "_mean_validation_accuracy.png"
-        plt.savefig(fname)
+        plt.savefig(fname.lower())
         plt.clf()
         return (valtable_nc, valtable_cl)
 
@@ -84,10 +84,10 @@ class summarizer():
         plt.plot(xs, best_test_cl)
         plt.title("best test accuracy of " + self.experiment + " experiment")
         plt.xlabel("percent of pepper noise")
-        plt.ylabel("test accuracy")
+        plt.ylabel("best test accuracy")
         plt.legend(["without curriculum", "with curriculum"])
         fname = "figures/experiment_" + self.experiment + "/" + self.experiment + "_best_test_accuracy.png"
-        plt.savefig(fname)
+        plt.savefig(fname.lower())
         plt.clf()
         return (best_test_nc, best_test_cl)
 
@@ -109,12 +109,12 @@ class summarizer():
         xs = np.linspace(1, self.sequences, self.sequences)
         plt.plot(xs, meantrainacc_nc)
         plt.plot(xs, meantrainacc_cl)
-        plt.title("mean train accuracy of " + self.experiment + " experiment")
+        plt.title("mean training accuracy of " + self.experiment + " experiment")
         plt.xlabel("percent of pepper noise")
-        plt.ylabel("mean accuracy")
+        plt.ylabel("mean training accuracy")
         plt.legend(["without curriculum", "with curriculum"])
         fname = "figures/experiment_" + self.experiment + "/" + self.experiment + "_mean_training_accuracy.png"
-        plt.savefig(fname)
+        plt.savefig(fname.lower())
         plt.clf()
         return (meantrainacc_nc, meantrainacc_cl)
 
@@ -136,12 +136,12 @@ class summarizer():
         xs = np.linspace(1, self.sequences, self.sequences)
         plt.plot(xs, meantestacc_nc)
         plt.plot(xs, meantestacc_cl)
-        plt.title("mean test accuracy " + self.experiment + " experiment")
+        plt.title("mean test accuracy of " + self.experiment + " experiment")
         plt.xlabel("percent of pepper noise")
         plt.ylabel("mean test accuracy")
         plt.legend(["without curriculum", "with curriculum"])
         fname = "figures/experiment_" + self.experiment + "/" + self.experiment + "_mean_test_accuracy.png"
-        plt.savefig(fname)
+        plt.savefig(fname.lower())
         plt.clf()
         return meantestacc_nc, meantestacc_cl
 
@@ -212,19 +212,9 @@ def process():
     processor.get_best_test()
 
 
-experiments = ["mnist", "kmnist", "cifar10"]
+experiments = ["MNIST", "KMNIST", "CIFAR10"]
 df_final = pd.DataFrame()
 for experiment in experiments:
     filepath = "results/experiment_" + experiment + "/metrics/"
     processor = summarizer(filepath, experiment)
-    df = pd.DataFrame()
-    for i in range(1, 41):
-        df = df.append(processor.get_confidence_interval(i), ignore_index=True)
-    df_final = pd.concat([df_final, df], axis=1)
-
-fname = "improvement_statistics.csv"
-df=pd.DataFrame(np.arange(1,41),columns=["Noise"])
-df_final=pd.concat([df,df_final],axis=1)
-path = "C:/Users/sherlock/Desktop"
-os.chdir(path)
-df_final.to_csv(fname, sep=";", index=False)
+    process()

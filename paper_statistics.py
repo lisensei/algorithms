@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scipy.stats as st
+import torch
 
 np.set_printoptions(precision=6)
 import os
@@ -145,6 +147,20 @@ class summarizer():
         plt.clf()
         return meantestacc_nc, meantestacc_cl
 
+    def get_raw_test(self):
+        raw_testacc_nc = np.zeros((self.sequences, self.repeats))
+        raw_testacc_cl = np.zeros((self.sequences, self.repeats))
+        for i in range(1, self.sequences + 1):
+            for j in range(0, 10):
+                filename_nc = filepath + "sequence " + str(i) + "/sequence " + str(i) + "_run " + str(
+                    j) + "_without curriculum.csv"
+                filename_cl = filepath + "sequence " + str(i) + "/sequence " + str(i) + "_run " + str(
+                    j) + "_with curriculum.csv"
+                raw_testacc_nc[i - 1, j] = np.mean(pd.read_csv(filename_nc, usecols=[11]).to_numpy())
+                raw_testacc_cl[i - 1, j] = np.mean(pd.read_csv(filename_cl, usecols=[11]).to_numpy())
+
+        return raw_testacc_nc, raw_testacc_cl
+
     def get_tablecsv(self):
         cl_table = np.zeros((40, 3))
         nc_table = np.zeros((40, 3))
@@ -212,9 +228,30 @@ def process():
     processor.get_best_test()
 
 
+'''Paper Statistics
+Using Bin(40,1/2) to approximate normal(20,1)
+$D=(D_1+D_2+...+D_{10})/10 
+where D_i = \sum_{j=1}^{40} p(x=j)d_j$ 
+and $d_j$ represents
+The difference of test accuracy between curriculum group and non-curriculum group
+Under a j\% pepper noise.
+'''
+
+x = []
+n=40
+for i in range(1, n+1):
+    x.append(st.binom.pmf(i, n, 1 / 2))
+
+pmf = np.array(x)
 experiments = ["MNIST", "KMNIST", "CIFAR10"]
 df_final = pd.DataFrame()
 for experiment in experiments:
     filepath = "results/experiment_" + experiment + "/metrics/"
     processor = summarizer(filepath, experiment)
-    process()
+    test_nc, test_cl = processor.get_raw_test()
+    ds = test_cl - test_nc
+    Ds = pmf.transpose() @ ds
+    mean = np.mean(Ds)
+    std = np.std(Ds, ddof=1)
+    half_width = 2.262 * std / np.sqrt(processor.repeats)
+    print(f"Mean:{mean},Std:{std},Confidence Interval:[{mean - half_width},{mean + half_width}]")
